@@ -1,0 +1,7 @@
+# General
+# ------------------------------------------------------------------------------
+USE_DOCKER=no
+IPYTHONDIR=/app/.ipython
+
+DATABASE_URL=postgres://postgres:12345678@127.0.0.1:5432/pms_api
+DJANGO_READ_DOT_ENV_FILE=True
