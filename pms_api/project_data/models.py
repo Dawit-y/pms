@@ -1,7 +1,7 @@
 from django.db import models
-from projects.models import ProjectStatus
 
 from pms_api.core.models.base import BaseModel
+from pms_api.projects.models import ProjectStatus
 
 
 # ── Guard mixin ─────────────────────────────────────────────────────────────
