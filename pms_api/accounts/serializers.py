@@ -1,3 +1,5 @@
+from djoser.serializers import UserCreateSerializer as DjoserUserCreateSerializer
+from djoser.serializers import UserSerializer as DjoserUserSerializer
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -9,7 +11,7 @@ from .models import User
 class PermissionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Permission
-        fields = ["id", "codename", "name", "module"]
+        fields = ["id", "codename", "name", "module", "description"]
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -37,23 +39,33 @@ class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
         token = super().get_token(user)
         token["permissions"] = user.get_permissions()
         token["role"] = user.role.name if user.role else None
-        token["user_id"] = str(user.uuid)
+        token["uuid"] = str(user.uuid)  # Keep UUID in token without breaking 'user_id'
         token["full_name"] = f"{user.first_name} {user.last_name}"
+        token["email"] = user.email
         return token
 
     def validate(self, attrs):
         data = super().validate(attrs)
-        # Also return permissions in the HTTP response body for convenience
+        # Also return permissions and user info in the HTTP response body
         data["permissions"] = self.user.get_permissions()
         data["role"] = self.user.role.name if self.user.role else None
+        data["user"] = {
+            "id": self.user.id,
+            "uuid": str(self.user.uuid),
+            "email": self.user.email,
+            "first_name": self.user.first_name,
+            "last_name": self.user.last_name,
+        }
         return data
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UserSerializer(DjoserUserSerializer):
+    """Extended Djoser user serializer with custom fields."""
+
     permissions = serializers.SerializerMethodField()
     role_name = serializers.CharField(source="role.name", read_only=True)
 
-    class Meta:
+    class Meta(DjoserUserSerializer.Meta):
         model = User
         fields = [
             "id",
@@ -65,7 +77,6 @@ class UserSerializer(serializers.ModelSerializer):
             "is_active",
             "role",
             "role_name",
-            "department",
             "permissions",
             "created_at",
         ]
@@ -73,3 +84,18 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_permissions(self, obj):
         return obj.get_permissions()
+
+
+class UserCreateSerializer(DjoserUserCreateSerializer):
+    """Custom user creation serializer."""
+
+    class Meta(DjoserUserCreateSerializer.Meta):
+        model = User
+        fields = [
+            "id",
+            "email",
+            "password",
+            "first_name",
+            "last_name",
+            "phone",
+        ]

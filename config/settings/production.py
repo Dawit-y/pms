@@ -160,5 +160,16 @@ LOGGING = {
 SPECTACULAR_SETTINGS["SERVERS"] = [
     {"url": "https://pms.com", "description": "Production server"},
 ]
+
+# CORS
+# ------------------------------------------------------------------------------
+# https://github.com/adamchainz/django-cors-headers
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=["https://pms.com"],
+)
+CORS_ALLOW_CREDENTIALS = True  # Required for cookies
+
 # Your stuff...
 # ------------------------------------------------------------------------------

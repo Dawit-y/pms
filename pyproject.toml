@@ -27,6 +27,7 @@ dependencies = [
   "django-redis==6.0.0",
   "djangorestframework==3.17.1",
   "djangorestframework-simplejwt>=5.5.1",
+  "djoser>=2.3.3",
   "drf-spectacular==0.29.0",
   "gunicorn==25.3.0",
   "hiredis==3.3.1",
