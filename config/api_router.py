@@ -1,9 +1,7 @@
-from django.conf import settings
-from rest_framework.routers import DefaultRouter
-from rest_framework.routers import SimpleRouter
-
-router = DefaultRouter() if settings.DEBUG else SimpleRouter()
-
+from django.urls import include
+from django.urls import path
 
 app_name = "api"
-urlpatterns = router.urls
+urlpatterns = [
+    path("", include("pms_api.accounts.urls")),
+]

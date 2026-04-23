@@ -1,101 +1,92 @@
-from djoser.serializers import UserCreateSerializer as DjoserUserCreateSerializer
-from djoser.serializers import UserSerializer as DjoserUserSerializer
+from django.contrib.auth.models import Group
+from django.contrib.auth.models import Permission
+from django.contrib.contenttypes.models import ContentType
+from djoser.serializers import UserCreateSerializer as BaseUserCreateSerializer
+from djoser.serializers import UserSerializer as BaseUserSerializer
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
-from .models import Permission
-from .models import Role
-from .models import User
+
+class UserCreateSerializer(BaseUserCreateSerializer):
+    class Meta(BaseUserCreateSerializer.Meta):
+        fields = [
+            "id",
+            "password",
+            "email",
+            "first_name",
+            "last_name",
+            "phone",
+            "is_staff",
+        ]
+
+
+class UserSerializer(BaseUserSerializer):
+    class Meta(BaseUserSerializer.Meta):
+        fields = ["id", "uuid", "email", "first_name", "last_name", "phone"]
+        ref_name = "user_serializer"
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token["email"] = user.email
+        return token
+
+
+class ContentTypeSerializer(serializers.ModelSerializer):
+    """Serializer for ContentType to show app and model info."""
+
+    class Meta:
+        model = ContentType
+        fields = ["id", "app_label", "model"]
 
 
 class PermissionSerializer(serializers.ModelSerializer):
+    """Serializer for Django's Permission model."""
+
+    content_type = ContentTypeSerializer(read_only=True)
+    content_type_id = serializers.PrimaryKeyRelatedField(
+        queryset=ContentType.objects.all(),
+        source="content_type",
+        write_only=True,
+        required=False,
+    )
+
     class Meta:
         model = Permission
-        fields = ["id", "codename", "name", "module", "description"]
+        fields = [
+            "id",
+            "name",
+            "codename",
+            "content_type",
+            "content_type_id",
+        ]
+        read_only_fields = ["id"]
 
 
-class RoleSerializer(serializers.ModelSerializer):
+class GroupSerializer(serializers.ModelSerializer):
+    """Serializer for Django's Group model (used as Roles)."""
+
     permissions = PermissionSerializer(many=True, read_only=True)
     permission_ids = serializers.PrimaryKeyRelatedField(
         many=True,
         queryset=Permission.objects.all(),
-        write_only=True,
         source="permissions",
+        write_only=True,
+        required=False,
     )
+    user_count = serializers.SerializerMethodField()
 
     class Meta:
-        model = Role
-        fields = ["id", "uuid", "name", "description", "permissions", "permission_ids"]
-
-
-class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    """
-    Injects user permissions directly into the JWT payload.
-    The frontend decodes the token to know what to show/hide.
-    """
-
-    @classmethod
-    def get_token(cls, user):
-        token = super().get_token(user)
-        token["permissions"] = user.get_permissions()
-        token["role"] = user.role.name if user.role else None
-        token["uuid"] = str(user.uuid)  # Keep UUID in token without breaking 'user_id'
-        token["full_name"] = f"{user.first_name} {user.last_name}"
-        token["email"] = user.email
-        return token
-
-    def validate(self, attrs):
-        data = super().validate(attrs)
-        # Also return permissions and user info in the HTTP response body
-        data["permissions"] = self.user.get_permissions()
-        data["role"] = self.user.role.name if self.user.role else None
-        data["user"] = {
-            "id": self.user.id,
-            "uuid": str(self.user.uuid),
-            "email": self.user.email,
-            "first_name": self.user.first_name,
-            "last_name": self.user.last_name,
-        }
-        return data
-
-
-class UserSerializer(DjoserUserSerializer):
-    """Extended Djoser user serializer with custom fields."""
-
-    permissions = serializers.SerializerMethodField()
-    role_name = serializers.CharField(source="role.name", read_only=True)
-
-    class Meta(DjoserUserSerializer.Meta):
-        model = User
+        model = Group
         fields = [
             "id",
-            "uuid",
-            "email",
-            "first_name",
-            "last_name",
-            "phone",
-            "is_active",
-            "role",
-            "role_name",
+            "name",
             "permissions",
-            "created_at",
+            "permission_ids",
+            "user_count",
         ]
-        read_only_fields = ["uuid", "created_at", "permissions"]
 
-    def get_permissions(self, obj):
-        return obj.get_permissions()
-
-
-class UserCreateSerializer(DjoserUserCreateSerializer):
-    """Custom user creation serializer."""
-
-    class Meta(DjoserUserCreateSerializer.Meta):
-        model = User
-        fields = [
-            "id",
-            "email",
-            "password",
-            "first_name",
-            "last_name",
-            "phone",
-        ]
+    def get_user_count(self, obj):
+        return obj.user_set.count()

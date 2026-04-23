@@ -8,21 +8,14 @@ from drf_spectacular.views import SpectacularSwaggerView
 from rest_framework.permissions import AllowAny
 
 urlpatterns = [
-    # Django Admin, use {% url 'admin:index' %}
     path(settings.ADMIN_URL, admin.site.urls),
-    # Your stuff: custom urls includes go here
-    # ...
-    # Media files
     *static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT),
 ]
 
-# API URLS
 urlpatterns += [
-    # API base url
+    # API root
     path("api/", include("config.api_router")),
-    # Authentication endpoints
-    path("api/auth/", include("pms_api.accounts.urls")),
-    # DRF auth token
+    # API Schema and Documentation
     path(
         "api/schema/",
         SpectacularAPIView.as_view(permission_classes=[AllowAny]),

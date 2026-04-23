@@ -76,6 +76,7 @@ THIRD_PARTY_APPS = [
     "rest_framework_simplejwt.token_blacklist",
     "djoser",
     "corsheaders",
+    "django_filters",
     "drf_spectacular",
     "mptt",
 ]
@@ -266,6 +267,13 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
 }
 
 # django-cors-headers - https://github.com/adamchainz/django-cors-headers#setup
@@ -298,6 +306,7 @@ SIMPLE_JWT = {
     "USER_ID_CLAIM": "user_id",
     "AUTH_TOKEN_CLASSES": ("rest_framework_simplejwt.tokens.AccessToken",),
     "TOKEN_TYPE_CLAIM": "token_type",
+    "TOKEN_OBTAIN_SERIALIZER": "pms_api.accounts.serializer.CustomTokenObtainPairSerializer",
 }
 
 # Djoser
