@@ -74,7 +74,6 @@ THIRD_PARTY_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "rest_framework_simplejwt.token_blacklist",
-    "djoser",
     "corsheaders",
     "django_filters",
     "drf_spectacular",
@@ -267,13 +266,13 @@ REST_FRAMEWORK = {
     ),
     "DEFAULT_PERMISSION_CLASSES": ("rest_framework.permissions.IsAuthenticated",),
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
-    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
-    "PAGE_SIZE": 20,
+    "DEFAULT_PAGINATION_CLASS": "pms_api.core.pagination.StandardPagination",
     "DEFAULT_FILTER_BACKENDS": [
         "django_filters.rest_framework.DjangoFilterBackend",
         "rest_framework.filters.SearchFilter",
         "rest_framework.filters.OrderingFilter",
     ],
+    "EXCEPTION_HANDLER": "pms_api.core.exceptions.custom_exception_handler",
 }
 
 # django-cors-headers - https://github.com/adamchainz/django-cors-headers#setup
@@ -308,30 +307,3 @@ SIMPLE_JWT = {
     "TOKEN_TYPE_CLAIM": "token_type",
     "TOKEN_OBTAIN_SERIALIZER": "pms_api.accounts.serializer.CustomTokenObtainPairSerializer",
 }
-
-# Djoser
-# -------------------------------------------------------------------------------
-DJOSER = {
-    "LOGIN_FIELD": "email",
-    "USER_CREATE_PASSWORD_RETYPE": True,
-    "SET_PASSWORD_RETYPE": True,
-    "PASSWORD_RESET_CONFIRM_URL": "password-reset/{uid}/{token}",
-    "ACTIVATION_URL": "activate/{uid}/{token}",
-    "SEND_ACTIVATION_EMAIL": False,  # Set to True if you want email activation
-    "SEND_CONFIRMATION_EMAIL": False,
-    "PASSWORD_CHANGED_EMAIL_CONFIRMATION": False,
-    "USERNAME_CHANGED_EMAIL_CONFIRMATION": False,
-    "SERIALIZERS": {
-        "user": "pms_api.accounts.serializers.UserSerializer",
-        "user_create": "pms_api.accounts.serializers.UserCreateSerializer",
-        "current_user": "pms_api.accounts.serializers.UserSerializer",
-    },
-    "PERMISSIONS": {
-        "user": ["rest_framework.permissions.IsAuthenticated"],
-        "user_list": ["rest_framework.permissions.IsAdminUser"],
-        "user_create": ["rest_framework.permissions.AllowAny"],
-    },
-}
-
-# Your stuff...
-# ------------------------------------------------------------------------------

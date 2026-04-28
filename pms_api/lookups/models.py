@@ -54,13 +54,19 @@ class Location(MPTTModel, BaseModel):
     """
     Hierarchical: Region → Zone → Woreda → Kebele (depth managed by MPTT).
     Admin creates hierarchy; projects reference a leaf node.
+
+    Note: 'location_type' stores the semantic level (region, zone, woreda, kebele).
+    MPTT's internal 'level' field stores the tree depth (0, 1, 2, 3...).
     """
 
     name_en = models.CharField(max_length=255)
     name_am = models.CharField(max_length=255, blank=True)
     name_or = models.CharField(max_length=255, blank=True)
     code = models.CharField(max_length=50, unique=True)
-    level = models.CharField(max_length=50, blank=True)  # region, zone, woreda, kebele
+    location_type = models.CharField(
+        max_length=50,
+        blank=True,
+    )  # region, zone, woreda, kebele
     parent = TreeForeignKey(
         "self",
         on_delete=models.CASCADE,

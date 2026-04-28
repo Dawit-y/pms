@@ -1,4 +1,5 @@
 import logging
+from datetime import timedelta
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -6,9 +7,15 @@ from django.contrib.auth.models import Group
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
+from django.db.models import Count
+from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from djoser.views import UserViewSet as DjoserUserViewSet
+from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.utils import OpenApiParameter
+from drf_spectacular.utils import extend_schema
+from rest_framework import filters
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
@@ -16,24 +23,50 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAdminUser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView
 
+from pms_api.core.exceptions import BusinessRuleViolation
+from pms_api.core.exceptions import ResourceNotFound
+from pms_api.core.models.access_log import AccessLog
+from pms_api.core.pagination import StandardPagination
+from pms_api.core.pagination import success_response
+from pms_api.core.permissions import IsSuperAdmin
+from pms_api.core.permissions import permission_required
+from pms_api.core.views import BaseModelViewSet
+from pms_api.core.views import BaseReadOnlyViewSet
+
+from .serializers import AccessLogSerializer
+from .serializers import AdminSetPasswordSerializer
+from .serializers import ChangePasswordSerializer
 from .serializers import ContentTypeSerializer
 from .serializers import CustomTokenObtainPairSerializer
 from .serializers import GroupSerializer
 from .serializers import PermissionSerializer
-from .serializers import UserSerializer
+from .serializers import UserCreateSerializer
+from .serializers import UserDetailSerializer
+from .serializers import UserListSerializer
+from .serializers import UserSelfSerializer
+from .serializers import UserUpdateSerializer
 
-logger = logging.getLogger(__name__)
 User = get_user_model()
+logger = logging.getLogger(__name__)
+
+
+# ─── Auth views ───────────────────────────────────────────────────────────────
 
 
 @method_decorator(csrf_exempt, name="dispatch")
 class CustomTokenObtainPairView(TokenObtainPairView):
+    """
+    Custom login view that returns user data and permissions along with tokens.
+    Sets refresh token in HTTP-only cookie for security.
+    """
+
     serializer_class = CustomTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):
@@ -41,16 +74,16 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
         if response.status_code == status.HTTP_200_OK:
             user = User.objects.get(email=request.data.get("email"))
-
-            user_data = UserSerializer(user).data
-
+            user_data = UserListSerializer(user).data
             all_permissions = user.get_all_permissions()
             permissions_list = list(all_permissions)
 
             response.data["user"] = user_data
-            response.data["permissions"] = permissions_list  # <--- HERE
+            response.data["permissions"] = permissions_list
+
             samesite = "Lax" if settings.DEBUG else "None"
-            # Cookie logic (Keep your existing code)
+
+            # Set refresh token in HTTP-only cookie
             refresh_token = response.data.pop("refresh", None)
             if refresh_token:
                 response.set_cookie(
@@ -59,7 +92,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
                     httponly=True,
                     secure=not settings.DEBUG,
                     samesite=samesite,
-                    max_age=7 * 24 * 60 * 60,
+                    max_age=7 * 24 * 60 * 60,  # 7 days
                     path="/",
                 )
         return response
@@ -67,6 +100,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
 @method_decorator(csrf_exempt, name="dispatch")
 class CustomTokenRefreshView(TokenRefreshView):
+    """
+    Custom token refresh view that retrieves refresh token from cookie
+    and returns updated user data and permissions.
+    """
+
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get("refresh_token")
 
@@ -87,17 +125,15 @@ class CustomTokenRefreshView(TokenRefreshView):
             )
 
         response_data = serializer.validated_data
-
         access_token = response_data.get("access")
 
         if access_token:
             try:
                 token = AccessToken(access_token)
                 user_id = token.payload.get("user_id")
-
                 user = User.objects.get(id=user_id)
 
-                response_data["user"] = UserSerializer(user).data
+                response_data["user"] = UserListSerializer(user).data
                 response_data["permissions"] = list(user.get_all_permissions())
 
             except (TokenError, ObjectDoesNotExist):
@@ -108,7 +144,8 @@ class CustomTokenRefreshView(TokenRefreshView):
 
         response = Response(response_data, status=status.HTTP_200_OK)
         samesite = "Lax" if settings.DEBUG else "None"
-        # Handle Refresh Token Cookie Rotation
+
+        # Handle refresh token rotation
         refresh = response_data.pop("refresh", None)
         if refresh:
             response.set_cookie(
@@ -156,86 +193,307 @@ class CustomTokenLogoutView(TokenRefreshView):
         return response
 
 
-class UserViewSet(DjoserUserViewSet):
+class MeView(APIView):
     """
-    Extended Djoser UserViewSet with custom actions.
+    GET   /api/auth/me/   → current user's full profile
+    PATCH /api/auth/me/   → update own non-sensitive fields
     """
 
-    @action(detail=False, methods=["get"])
-    def me(self, request):
-        """Get current user with permissions."""
-        serializer = self.get_serializer(request.user)
-        return Response(serializer.data)
+    permission_classes = [IsAuthenticated]
 
-    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
-    def assign_groups(self, request, pk=None):
-        """Assign groups to a user."""
+    def get(self, request):
+        serializer = UserSelfSerializer(request.user, context={"request": request})
+        return Response(success_response(serializer.data))
+
+    def patch(self, request):
+        serializer = UserSelfSerializer(
+            request.user,
+            data=request.data,
+            partial=True,
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save(updated_by=request.user)
+        return Response(success_response(serializer.data, message="Profile updated."))
+
+
+class ChangePasswordView(APIView):
+    """POST /api/auth/me/change-password/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        ser = ChangePasswordSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        request.user.set_password(ser.validated_data["new_password"])
+        request.user.save(update_fields=["password"])
+        logger.info("Password changed for user=%s", request.user.id)
+        return Response(success_response(message="Password changed successfully."))
+
+
+# ─── User ViewSet ─────────────────────────────────────────────────────────────
+
+
+class UserViewSet(BaseModelViewSet):
+    """
+    Full user lifecycle management for admins.
+    All write operations require 'user.manage' permission or staff/superuser.
+
+    Uses Django's built-in Group model for role management.
+    """
+
+    lookup_field = "uuid"
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
+    filterset_fields = ["is_active", "is_staff", "groups"]
+    search_fields = ["email", "first_name", "last_name", "phone"]
+    ordering_fields = ["created_at", "email", "first_name", "last_name"]
+    ordering = ["-created_at"]
+
+    # Different serializers per action
+    serializer_classes = {
+        "list": UserListSerializer,
+        "retrieve": UserDetailSerializer,
+        "create": UserCreateSerializer,
+        "update": UserUpdateSerializer,
+        "partial_update": UserUpdateSerializer,
+    }
+    serializer_class = UserDetailSerializer  # fallback
+
+    # Custom action permissions — CRUD is handled by StrictDjangoModelPermissions
+    action_permissions = {
+        "restore": [IsSuperAdmin],
+        "hard_destroy": [IsSuperAdmin],
+        "set_password": [permission_required("accounts.manage_user")],
+        "activate": [permission_required("accounts.manage_user")],
+        "deactivate": [permission_required("accounts.manage_user")],
+        "assign_groups": [permission_required("accounts.manage_user")],
+        "activity": [permission_required("accounts.view_user")],
+        "stats": [permission_required("accounts.view_user")],
+    }
+
+    queryset = User.all_objects.all()
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .prefetch_related("groups", "groups__permissions", "user_permissions")
+            .order_by("-created_at")
+        )
+
+    def _check_delete_allowed(self, instance):
+        if instance == self.request.user:
+            msg = "You cannot delete your own account."
+            raise BusinessRuleViolation(msg)
+        if instance.is_superuser and not self.request.user.is_superuser:
+            msg = "Only superusers can delete superuser accounts."
+            raise BusinessRuleViolation(msg)
+
+    # ── Admin force-reset password ────────────────────────────────────────────
+
+    @extend_schema(
+        summary="Admin: force-reset a user's password",
+        request=AdminSetPasswordSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="set-password")
+    def set_password(self, request, *args, **kwargs):
+        user = self.get_object()
+        ser = AdminSetPasswordSerializer(data=request.data)
+        ser.is_valid(raise_exception=True)
+        user.set_password(ser.validated_data["new_password"])
+        user.save(update_fields=["password"])
+        logger.info("Admin %s reset password for user %s", request.user.id, user.id)
+        return Response(success_response(message=f"Password reset for {user.email}."))
+
+    # ── Activate / Deactivate ─────────────────────────────────────────────────
+
+    @extend_schema(summary="Activate a user account")
+    @action(detail=True, methods=["post"], url_path="activate")
+    def activate(self, request, *args, **kwargs):
+        user = self.get_object()
+        if user.is_active:
+            return Response(success_response(message="User is already active."))
+        user.is_active = True
+        user.updated_by = request.user
+        user.save(update_fields=["is_active", "updated_by", "updated_at"])
+        return Response(success_response(message=f"{user.email} activated."))
+
+    @extend_schema(summary="Deactivate (suspend) a user account")
+    @action(detail=True, methods=["post"], url_path="deactivate")
+    def deactivate(self, request, *args, **kwargs):
+        user = self.get_object()
+        if user == request.user:
+            msg = "You cannot deactivate your own account."
+            raise BusinessRuleViolation(msg)
+        if user.is_superuser and not request.user.is_superuser:
+            msg = "Cannot deactivate a superuser account."
+            raise BusinessRuleViolation(msg)
+        user.is_active = False
+        user.updated_by = request.user
+        user.save(update_fields=["is_active", "updated_by", "updated_at"])
+        return Response(success_response(message=f"{user.email} deactivated."))
+
+    # ── Assign groups (replaces assign_role) ──────────────────────────────────
+
+    @extend_schema(
+        summary="Assign groups to a user (replaces role assignment)",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "group_ids": {"type": "array", "items": {"type": "integer"}},
+                },
+            },
+        },
+    )
+    @action(detail=True, methods=["post"], url_path="assign-groups")
+    @transaction.atomic
+    def assign_groups(self, request, *args, **kwargs):
         user = self.get_object()
         group_ids = request.data.get("group_ids", [])
 
-        groups = Group.objects.filter(id__in=group_ids)
+        if not isinstance(group_ids, list):
+            msg = "group_ids must be a list of group IDs."
+            raise BusinessRuleViolation(msg)
+
+        groups = Group.objects.filter(pk__in=group_ids)
+        if len(groups) != len(group_ids):
+            found_ids = set(groups.values_list("pk", flat=True))
+            missing = set(group_ids) - found_ids
+            msg = f"Groups with ids={list(missing)} not found."
+            raise ResourceNotFound(msg)
+
         user.groups.set(groups)
+        user.updated_by = request.user
+        user.save(update_fields=["updated_by", "updated_at"])
+        return Response(
+            success_response(
+                UserDetailSerializer(user, context={"request": request}).data,
+                message="Groups assigned successfully.",
+            ),
+        )
 
-        serializer = self.get_serializer(user)
-        return Response(serializer.data)
+    # ── User activity (access log) ────────────────────────────────────────────
 
-    @action(detail=True, methods=["post"], permission_classes=[IsAdminUser])
-    def assign_permissions(self, request, pk=None):
-        """Assign direct permissions to a user."""
+    @extend_schema(
+        summary="User's recent API activity (access log)",
+        parameters=[
+            OpenApiParameter("days", int, description="Last N days, default 30"),
+        ],
+    )
+    @action(detail=True, methods=["get"], url_path="activity")
+    def activity(self, request, *args, **kwargs):
         user = self.get_object()
-        permission_ids = request.data.get("permission_ids", [])
+        days = int(request.query_params.get("days", 30))
+        since = timezone.now() - timedelta(days=days)
 
-        permissions = Permission.objects.filter(id__in=permission_ids)
-        user.user_permissions.set(permissions)
+        logs = AccessLog.objects.filter(user=user, timestamp__gte=since).order_by(
+            "-timestamp",
+        )[:200]
+        ser = AccessLogSerializer(logs, many=True)
+        return Response(success_response(ser.data))
 
-        serializer = self.get_serializer(user)
-        return Response(serializer.data)
+    # ── Stats ─────────────────────────────────────────────────────────────────
+
+    @extend_schema(summary="User statistics (total, active, by group)")
+    @action(detail=False, methods=["get"], url_path="stats")
+    def stats(self, request, *args, **kwargs):
+        total = User.objects.count()
+        active = User.objects.filter(is_active=True).count()
+        inactive = total - active
+        deleted = User.all_objects.filter(is_deleted=True).count()
+        by_group = list(
+            User.objects.values("groups__name")
+            .annotate(count=Count("id"))
+            .order_by("-count"),
+        )
+        return Response(
+            success_response(
+                {
+                    "total": total,
+                    "active": active,
+                    "inactive": inactive,
+                    "deleted": deleted,
+                    "by_group": by_group,
+                },
+            ),
+        )
 
 
-class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
+# ─── Permission ViewSet (read-only) ───────────────────────────────────────────
+
+
+class PermissionViewSet(BaseReadOnlyViewSet):
     """
-    ViewSet for viewing Django permissions (read-only).
-    Permissions should be created in code via model Meta or migrations,
-    not through the API, as they need corresponding code implementation.
+    Read-only ViewSet for Django's built-in Permission model.
+
+    GET /api/permissions/                          → all permissions (paginated)
+    GET /api/permissions/?content_type__app_label=x → filtered by app
+    GET /api/permissions/{id}/                      → single permission
+    GET /api/permissions/by_app/                    → grouped by app_label
     """
 
-    queryset = Permission.objects.all().select_related("content_type")
-    serializer_class = PermissionSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
-    filterset_fields = {
-        "codename": ["exact", "icontains"],
-        "name": ["exact", "icontains"],
-        "content_type__app_label": ["exact"],
-        "content_type__model": ["exact"],
-    }
-    search_fields = ["name", "codename"]
-    ordering_fields = ["id", "codename", "name", "content_type__app_label"]
-    ordering = ["content_type__app_label", "codename"]
+    lookup_field = "pk"
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = {"content_type__app_label": ["exact"]}
+    search_fields = ["codename", "name"]
 
-    @action(detail=False, methods=["get"])
-    def by_app(self, request):
-        """Get permissions grouped by app."""
-        permissions = self.filter_queryset(self.get_queryset())
+    def get_queryset(self):
+        return Permission.objects.select_related("content_type").order_by(
+            "content_type__app_label",
+            "codename",
+        )
+
+    def get_serializer_class(self):
+        return PermissionSerializer
+
+    def retrieve(self, request, *args, **kwargs):
+        pk = self.kwargs.get("pk")
+        try:
+            perm = Permission.objects.select_related("content_type").get(pk=pk)
+        except (Permission.DoesNotExist, ValueError) as err:
+            raise ResourceNotFound from err
+        return Response(success_response(PermissionSerializer(perm).data))
+
+    @extend_schema(summary="Permissions grouped by app label")
+    @action(detail=False, methods=["get"], url_path="by_app")
+    def by_app(self, request, *args, **kwargs):
+        """Return permissions grouped by content_type.app_label."""
+        permissions = self.get_queryset()
         grouped = {}
-
         for perm in permissions:
-            app_label = perm.content_type.app_label
-            if app_label not in grouped:
-                grouped[app_label] = []
-            grouped[app_label].append(PermissionSerializer(perm).data)
+            app = perm.content_type.app_label
+            if app not in grouped:
+                grouped[app] = []
+            grouped[app].append(PermissionSerializer(perm).data)
+        return Response(success_response(grouped))
 
-        return Response(grouped)
+
+# ─── Group ViewSet (CRUD) ─────────────────────────────────────────────────────
 
 
 class GroupViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for managing Django groups (used as Roles).
-    Full CRUD operations for groups and their permissions.
+    Full CRUD ViewSet for Django's built-in Group model (used as Roles).
+
+    Django's Group model does NOT have uuid, soft-delete, or audit fields,
+    so we inherit from ModelViewSet directly instead of BaseModelViewSet.
     """
 
     queryset = Group.objects.all().prefetch_related("permissions")
     serializer_class = GroupSerializer
+    pagination_class = StandardPagination
     permission_classes = [IsAuthenticated, IsAdminUser]
+    lookup_field = "pk"
+    filter_backends = [
+        DjangoFilterBackend,
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
     filterset_fields = {
         "name": ["exact", "icontains"],
     }
@@ -243,18 +501,63 @@ class GroupViewSet(viewsets.ModelViewSet):
     ordering_fields = ["id", "name"]
     ordering = ["name"]
 
+    def list(self, request, *args, **kwargs):
+        qs = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(qs)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(qs, many=True)
+        return Response(success_response(serializer.data))
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        return Response(success_response(serializer.data))
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            success_response(serializer.data, message="Group created successfully."),
+            status=status.HTTP_201_CREATED,
+        )
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            success_response(serializer.data, message="Group updated successfully."),
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        instance = self.get_object()
+        instance.delete()
+        return Response(
+            success_response(message="Group deleted successfully."),
+            status=status.HTTP_200_OK,
+        )
+
     @action(detail=True, methods=["get"])
     def users(self, request, pk=None):
         """Get all users in this group."""
         group = self.get_object()
         users = group.user_set.all()
 
-        serializer = UserSerializer(users, many=True)
-        return Response(serializer.data)
+        serializer = UserListSerializer(users, many=True)
+        return Response(success_response(serializer.data))
 
     @action(detail=True, methods=["post"])
     def add_permissions(self, request, pk=None):
-        """Add permissions to a group."""
+        """
+        Add permissions to a group.
+
+        Body: {"permission_ids": [1, 2, 3]}
+        """
         group = self.get_object()
         permission_ids = request.data.get("permission_ids", [])
 
@@ -262,11 +565,15 @@ class GroupViewSet(viewsets.ModelViewSet):
         group.permissions.add(*permissions)
 
         serializer = self.get_serializer(group)
-        return Response(serializer.data)
+        return Response(success_response(serializer.data, message="Permissions added."))
 
     @action(detail=True, methods=["post"])
     def remove_permissions(self, request, pk=None):
-        """Remove permissions from a group."""
+        """
+        Remove permissions from a group.
+
+        Body: {"permission_ids": [1, 2, 3]}
+        """
         group = self.get_object()
         permission_ids = request.data.get("permission_ids", [])
 
@@ -274,10 +581,12 @@ class GroupViewSet(viewsets.ModelViewSet):
         group.permissions.remove(*permissions)
 
         serializer = self.get_serializer(group)
-        return Response(serializer.data)
+        return Response(
+            success_response(serializer.data, message="Permissions removed."),
+        )
 
 
-class ContentTypeViewSet(viewsets.ReadOnlyModelViewSet):
+class ContentTypeViewSet(BaseReadOnlyViewSet):
     """
     ViewSet for viewing ContentTypes (reference for understanding permissions).
     """
@@ -285,6 +594,7 @@ class ContentTypeViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = ContentType.objects.all()
     serializer_class = ContentTypeSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]
+    lookup_field = "pk"
     filterset_fields = {
         "app_label": ["exact"],
         "model": ["exact", "icontains"],

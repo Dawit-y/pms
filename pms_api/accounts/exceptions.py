@@ -1,12 +1,14 @@
-from pms_api.core.exceptions import BaseAPIException
+from rest_framework import status
+from rest_framework.exceptions import APIException
 
 
-class UserEmailRequiredException(BaseAPIException):
+class UserEmailRequiredException(APIException):
+    status_code = status.HTTP_400_BAD_REQUEST
     default_code = "USER_EMAIL_REQUIRED"
-    default_message = "Users must have an email address"
+    default_detail = "Users must have an email address"
 
 
-class UserNotFoundException(BaseAPIException):
-    status_code = 404
+class UserNotFoundException(APIException):
+    status_code = status.HTTP_404_NOT_FOUND
     default_code = "USER_NOT_FOUND"
-    default_message = "User not found"
+    default_detail = "User not found"

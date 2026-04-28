@@ -52,13 +52,13 @@ class BudgetRequest(BaseModel):
     )
 
     def submit(self, submitted_by):
-        self.bdr_status = "submitted"
+        self.status = "submitted"
         self.updated_by = submitted_by
         self.save()
 
     def approve(self, approved_by, approved_amount):
-        self.bdr_status = "approved"
-        self.bdr_approved_amount = approved_amount
+        self.status = "approved"
+        self.approved_amount = approved_amount
         self.updated_by = approved_by
         self.save()
         # Unlock the project
@@ -66,7 +66,7 @@ class BudgetRequest(BaseModel):
         self.project.save(update_fields=["is_active"])
 
     def reject(self, rejected_by, remarks=""):
-        self.bdr_status = "rejected"
+        self.status = "rejected"
         self.updated_by = rejected_by
         self.save()
 
@@ -126,7 +126,7 @@ class BudgetForwardingStep(BaseModel):
         for user in dept_users:
             notify(
                 recipient=user,
-                verb=f"A budget request for '{self.budget_request.project.prj_title}'"
+                verb=f"A budget request for '{self.budget_request.project.title}'"
                 f" has been forwarded to your department",
                 action_object=self.budget_request,
                 actor=self.acted_by,

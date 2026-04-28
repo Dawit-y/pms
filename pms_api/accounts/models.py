@@ -10,6 +10,19 @@ from .exceptions import UserEmailRequiredException
 
 
 class UserManager(BaseUserManager):
+    """
+    Custom user manager that respects soft delete.
+    Non-deleted users only by default.
+    Use all_objects to get all records including deleted.
+    """
+
+    def get_queryset(self):
+        """
+        Override to filter out soft-deleted users by default.
+        This fixes the MRO conflict with BaseModel's SoftDeleteManager.
+        """
+        return super().get_queryset().filter(is_deleted=False)
+
     def create_user(self, email, password=None, **extra_fields):
         if not email:
             raise UserEmailRequiredException
@@ -27,10 +40,13 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     """
-    Custom user model using Django's built-in Permission and Group models.
+    Custom user model with enterprise features:
+    - UUID for public identification
+    - Timestamps (created_at, updated_at)
+    - Signal emission on changes
+    - Built-in permission and group support
 
-    - user_permissions: Direct permissions assigned to the user
-    - groups: Groups the user belongs to (each group has permissions)
+    Uses Django's built-in Permission and Group models for RBAC.
     """
 
     email = models.EmailField(unique=True)
@@ -42,11 +58,23 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = ["first_name", "last_name"]
+
     objects = UserManager()
+    all_objects = models.Manager()
 
     class Meta:
         verbose_name = "User"
         verbose_name_plural = "Users"
+
+        permissions = [
+            (
+                "manage_user",
+                (
+                    "Can manage user accounts "
+                    "(activate, deactivate, reset password, assign groups)"
+                ),
+            ),
+        ]
 
     def __str__(self):
         return self.email
@@ -59,17 +87,18 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
 
     def get_all_permissions_list(self):
         """
-        Get all permissions for the user (from groups and direct permissions).
-        Returns list of permission codenames in format: 'app_label.codename'
+        Get all permissions as sorted list of strings in format: 'app_label.codename'
         """
         if self.is_superuser:
-            return list(
-                Permission.objects.values_list(
-                    "content_type__app_label",
-                    "codename",
-                ).distinct(),
+            perms = Permission.objects.values_list(
+                "content_type__app_label",
+                "codename",
             )
+            return sorted(f"{app_label}.{codename}" for app_label, codename in perms)
 
-        # Get permissions from groups and direct user permissions
         perms = self.get_all_permissions()
-        return list(perms)
+        return sorted(perms)
+
+
+# Connect signals for the User model
+User.connect_signals()

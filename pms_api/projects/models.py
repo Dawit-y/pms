@@ -9,7 +9,6 @@ class Project(BaseModel):
     All child data (employees, documents, payments...) hangs off this.
     """
 
-    # After decorator: prj_code, prj_title, etc.
     code = models.CharField(max_length=50, unique=True)
     title = models.CharField(max_length=500)
     description = models.TextField(blank=True)
@@ -55,7 +54,7 @@ class Project(BaseModel):
         ordering = ["-created_at"]
 
     def __str__(self):
-        return f"{self.prj_code} — {self.prj_title}"
+        return f"{self.code} — {self.title}"
 
 
 class ProjectStatus(BaseModel):

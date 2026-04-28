@@ -1,4 +1,3 @@
-import json
 import logging
 import time
 
@@ -32,14 +31,16 @@ class AccessLogMiddleware(MiddlewareMixin):
 
         body = None
         try:
-            if request.body:
-                raw = json.loads(request.body)
+            raw = getattr(request, "data", None)
+
+            if isinstance(raw, dict):
                 body = {
                     k: "***" if k.lower() in self.SENSITIVE_KEYS else v
                     for k, v in raw.items()
                 }
-        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
-            logger.debug("Failed to parse request body: %s", exc)
+
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Failed to parse request data: %s", exc)
 
         AccessLog.objects.create(
             user=request.user,
@@ -50,7 +51,7 @@ class AccessLogMiddleware(MiddlewareMixin):
             request_body=body,
             response_status=response.status_code,
             duration_ms=duration,
-            session_key=request.session.session_key or "",
+            session_key=getattr(request.session, "session_key", "") or "",
         )
 
         return response
