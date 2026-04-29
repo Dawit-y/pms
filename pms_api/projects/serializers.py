@@ -1,7 +1,6 @@
 from rest_framework import serializers
 
 from pms_api.core.serializers import BaseModelSerializer
-from pms_api.core.serializers import PrefixedModelSerializer
 from pms_api.projects.models import Project
 from pms_api.projects.models import ProjectStatus
 
@@ -30,7 +29,7 @@ class ProjectStatusSerializer(BaseModelSerializer):
         return obj.changed_by.email if obj.changed_by_id else None
 
 
-class ProjectListSerializer(PrefixedModelSerializer):
+class ProjectListSerializer(BaseModelSerializer):
     """Lightweight: for list views."""
 
     current_status_label = serializers.CharField(
@@ -86,7 +85,7 @@ class ProjectListSerializer(PrefixedModelSerializer):
             return None
 
 
-class ProjectDetailSerializer(PrefixedModelSerializer):
+class ProjectDetailSerializer(BaseModelSerializer):
     """Full detail with nested status history and budget summary."""
 
     current_status_detail = ProjectStatusSerializer(
@@ -183,7 +182,7 @@ class ProjectDetailSerializer(PrefixedModelSerializer):
         return None
 
 
-class ProjectCreateSerializer(PrefixedModelSerializer):
+class ProjectCreateSerializer(BaseModelSerializer):
     class Meta:
         model = Project
         fields = [

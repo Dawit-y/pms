@@ -1,15 +1,3 @@
-"""
-core/serializers.py
-───────────────────
-Base serializer classes. Every app serializer inherits from one of these.
-
-Hierarchy:
-    BaseModelSerializer          ← read/write with audit injection
-      └── PrefixedModelSerializer  ← handles @field_prefix models
-            └── SoftDeleteSerializer   ← exposes is_deleted, restore support
-                  └── HistorySerializer   ← includes full change history
-"""
-
 from django.contrib.contenttypes.models import ContentType
 from rest_framework import serializers
 
@@ -93,32 +81,6 @@ class BaseModelSerializer(
 
     class Meta:
         abstract = True
-
-
-# ─── Prefixed model serializer ────────────────────────────────────────────────
-
-
-class PrefixedModelSerializer(BaseModelSerializer):
-    """
-    For models decorated with @field_prefix('xxx').
-    The model already stores prefixed column names; this serializer
-    exposes them correctly and provides a prefix-aware field reference.
-
-    Example:
-        class ProjectSerializer(PrefixedModelSerializer):
-            class Meta:
-                model  = Project
-                fields = '__all__'
-        # Output keys: title, code, budget, uuid, created_at ...
-    """
-
-    def get_field_names(self, declared_fields, info):
-        names = super().get_field_names(declared_fields, info)
-        prefix = getattr(self.Meta.model, "_field_prefix", None)
-        if not prefix:
-            return names
-        # Ensure uuid and base fields are always present
-        return list(names)
 
 
 # ─── Soft-delete serializer ───────────────────────────────────────────────────

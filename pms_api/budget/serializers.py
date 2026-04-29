@@ -9,7 +9,6 @@ from rest_framework import serializers
 from pms_api.budget.models import BudgetForwardingStep
 from pms_api.budget.models import BudgetRequest
 from pms_api.core.serializers import BaseModelSerializer
-from pms_api.core.serializers import PrefixedModelSerializer
 from pms_api.lookups.models import Department
 
 
@@ -47,7 +46,7 @@ class BudgetForwardingStepSerializer(BaseModelSerializer):
         return obj.acted_by.email if obj.acted_by_id else None
 
 
-class BudgetRequestListSerializer(PrefixedModelSerializer):
+class BudgetRequestListSerializer(BaseModelSerializer):
     project_code = serializers.CharField(source="project.code", read_only=True)
     project_title = serializers.CharField(source="project.title", read_only=True)
     department_name = serializers.CharField(
@@ -75,7 +74,7 @@ class BudgetRequestListSerializer(PrefixedModelSerializer):
         ]
 
 
-class BudgetRequestDetailSerializer(PrefixedModelSerializer):
+class BudgetRequestDetailSerializer(BaseModelSerializer):
     project_title = serializers.CharField(source="project.title", read_only=True)
     project_code = serializers.CharField(source="project.code", read_only=True)
     department_name = serializers.CharField(
@@ -118,7 +117,7 @@ class BudgetRequestDetailSerializer(PrefixedModelSerializer):
         return obj.created_by.email if obj.created_by_id else None
 
 
-class BudgetRequestCreateSerializer(PrefixedModelSerializer):
+class BudgetRequestCreateSerializer(BaseModelSerializer):
     class Meta:
         model = BudgetRequest
         fields = [
