@@ -78,6 +78,7 @@ THIRD_PARTY_APPS = [
     "django_filters",
     "drf_spectacular",
     "mptt",
+    "simple_history",
 ]
 
 LOCAL_APPS = [
@@ -143,6 +144,7 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "simple_history.middleware.HistoryRequestMiddleware",
     "pms_api.core.middleware.AccessLogMiddleware",
 ]
 
@@ -307,3 +309,10 @@ SIMPLE_JWT = {
     "TOKEN_TYPE_CLAIM": "token_type",
     "TOKEN_OBTAIN_SERIALIZER": "pms_api.accounts.serializer.CustomTokenObtainPairSerializer",
 }
+
+# django-simple-history
+# -------------------------------------------------------------------------------
+# https://django-simple-history.readthedocs.io/en/latest/
+SIMPLE_HISTORY_REVERT_DISABLED = False
+SIMPLE_HISTORY_HISTORY_ID_USE_UUID = False
+SIMPLE_HISTORY_FILEFIELD_TO_CHARFIELD = True

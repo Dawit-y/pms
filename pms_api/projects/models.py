@@ -1,12 +1,16 @@
 from django.db import models
 
 from pms_api.core.models.base import BaseModel
+from pms_api.core.models.mixins import HistoryMixin
 
 
-class Project(BaseModel):
+class Project(HistoryMixin, BaseModel):
     """
     A government project: road, school, hospital, dam, etc.
     All child data (employees, documents, payments...) hangs off this.
+
+    History tracking enabled: All changes are automatically logged.
+    Access via project.history.all()
     """
 
     code = models.CharField(max_length=50, unique=True)
@@ -57,9 +61,11 @@ class Project(BaseModel):
         return f"{self.code} — {self.title}"
 
 
-class ProjectStatus(BaseModel):
+class ProjectStatus(HistoryMixin, BaseModel):
     """
     One entry per status change. Changed only when monitoring team visits.
+
+    History tracking enabled: Status changes are tracked for audit purposes.
     """
 
     STATUS_CHOICES = [

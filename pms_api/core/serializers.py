@@ -103,31 +103,116 @@ class SoftDeleteSerializer(BaseModelSerializer):
 
 class HistoryRecordSerializer(serializers.Serializer):
     """
-    Read-only. Serializes a django-simple-history HistoricalRecord.
+    serializer for django-simple-history records.
+
+    Provides:
+    - Full change tracking with field-level diffs
+    - User attribution
+    - Change reasons
+    - History type (created/updated/deleted)
+    - Timestamp information
     """
 
-    history_id = serializers.IntegerField()
-    history_date = serializers.DateTimeField()
-    history_type = serializers.CharField()  # +  created, ~ changed, - deleted
+    history_id = serializers.IntegerField(read_only=True)
+    history_date = serializers.DateTimeField(read_only=True)
+    history_type = serializers.SerializerMethodField()
     history_user = serializers.SerializerMethodField()
+    history_change_reason = serializers.CharField(read_only=True, allow_null=True)
     changed_fields = serializers.SerializerMethodField()
 
-    def get_history_user(self, record) -> str | None:
-        return record.history_user.email if record.history_user_id else None
+    # Include the actual record data for context
+    record_data = serializers.SerializerMethodField()
 
-    def get_changed_fields(self, record) -> dict:
-        """Returns {field: {old: x, new: y}} for changed records."""
+    def get_history_type(self, record) -> str:
+        """Returns human-readable action type."""
+        type_map = {
+            "+": "Created",
+            "~": "Updated",
+            "-": "Deleted",
+        }
+        return type_map.get(record.history_type, record.history_type)
+
+    def get_history_user(self, record) -> dict | None:
+        """Returns user info who made the change."""
+        if not record.history_user_id:
+            return None
+        return {
+            "email": record.history_user.email,
+            "uuid": str(record.history_user.uuid),
+            "full_name": getattr(record.history_user, "get_full_name", lambda: None)(),
+        }
+
+    def get_changed_fields(self, record) -> list[dict]:
+        """
+        Returns detailed field-level changes.
+
+        Format: [{"field": "title", "old": "Old Title", "new": "New Title"}]
+        """
         try:
             prev = record.prev_record
         except Exception:  # noqa: BLE001
-            return {}
+            return []
+
         if not prev:
-            return {}
+            # First record (creation) - show all non-null fields
+            if record.history_type == "+":
+                fields = []
+                for field in record.instance._meta.fields:  # noqa: SLF001
+                    field_name = field.name
+                    if field_name in ["id", "uuid", "created_at", "updated_at"]:
+                        continue
+                    value = getattr(record, field_name, None)
+                    if value is not None:
+                        fields.append(
+                            {
+                                "field": field_name,
+                                "old": None,
+                                "new": self._format_field_value(value),
+                            },
+                        )
+                return fields
+            return []
+
+        # Compare with previous version
         delta = record.diff_against(prev)
-        return {
-            change.field: {"old": change.old, "new": change.new}
+        return [
+            {
+                "field": change.field,
+                "old": self._format_field_value(change.old),
+                "new": self._format_field_value(change.new),
+            }
             for change in delta.changes
+        ]
+
+    def get_record_data(self, record) -> dict:
+        """
+        Returns a snapshot of key fields at this point in history.
+        Useful for understanding the full state, not just changes.
+        """
+        # Only include key identifying fields to keep response size manageable
+        data = {
+            "uuid": str(getattr(record, "uuid", None)),
         }
+
+        # Add model-specific key fields
+        if hasattr(record, "code"):
+            data["code"] = record.code
+        if hasattr(record, "title"):
+            data["title"] = record.title
+        if hasattr(record, "name"):
+            data["name"] = record.name
+        if hasattr(record, "status"):
+            data["status"] = record.status
+
+        return data
+
+    def _format_field_value(self, value) -> str:
+        """Format field values for display."""
+        if value is None:
+            return None
+        if hasattr(value, "isoformat"):  # datetime/date
+            return value.isoformat()
+        return str(value)
 
 
 # ─── Restore serializer (admin only) ─────────────────────────────────────────

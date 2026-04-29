@@ -5,7 +5,7 @@ from django.urls import include
 from django.urls import path
 from drf_spectacular.views import SpectacularAPIView
 from drf_spectacular.views import SpectacularSwaggerView
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import IsAuthenticated
 
 urlpatterns = [
     path(settings.ADMIN_URL, admin.site.urls),
@@ -18,14 +18,14 @@ urlpatterns += [
     # API Schema and Documentation
     path(
         "api/schema/",
-        SpectacularAPIView.as_view(permission_classes=[AllowAny]),
+        SpectacularAPIView.as_view(permission_classes=[IsAuthenticated]),
         name="api-schema",
     ),
     path(
         "api/docs/",
         SpectacularSwaggerView.as_view(
             url_name="api-schema",
-            permission_classes=[AllowAny],
+            permission_classes=[IsAuthenticated],
         ),
         name="api-docs",
     ),

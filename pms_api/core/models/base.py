@@ -20,6 +20,12 @@ class BaseModel(
     """
     Inherit from this for all domain models.
     Provides: uuid, timestamps, audit trail, soft delete, row-level security, signals.
+
+    Note: History tracking is opt-in via HistoryMixin. Add it explicitly to models
+    that need change tracking:
+
+        class Project(HistoryMixin, BaseModel):
+            pass
     """
 
     class Meta:

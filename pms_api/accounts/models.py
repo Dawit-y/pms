@@ -40,7 +40,7 @@ class UserManager(BaseUserManager):
 
 class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     """
-    Custom user model with enterprise features:
+    Custom user model with features:
     - UUID for public identification
     - Timestamps (created_at, updated_at)
     - Signal emission on changes
@@ -69,10 +69,7 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
         permissions = [
             (
                 "manage_user",
-                (
-                    "Can manage user accounts "
-                    "(activate, deactivate, reset password, assign groups)"
-                ),
+                ("Can manage user accounts (activate, deactivate, reset password, assign groups)"),
             ),
         ]
 

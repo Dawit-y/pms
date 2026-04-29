@@ -24,6 +24,7 @@ Every feature is implemented here ONCE so app-level ViewSets get it for free:
 """
 
 import logging
+from datetime import datetime
 
 from django.db import transaction
 from django.db.models import Q
@@ -70,12 +71,8 @@ class SecureQuerySetMixin:
         request = self.request
 
         # ── Deleted filter ────────────────────────────────────────────────────
-        include_deleted = (
-            request.query_params.get("include_deleted", "false").lower() == "true"
-        )
-        if not (
-            include_deleted and (request.user.is_staff or request.user.is_superuser)
-        ):
+        include_deleted = request.query_params.get("include_deleted", "false").lower() == "true"
+        if not (include_deleted and (request.user.is_staff or request.user.is_superuser)):
             # Default: hide soft-deleted records.
             # (Requires subclasses to use .all_objects as
             # their base queryset so we can filter here)
@@ -167,10 +164,7 @@ class BaseModelViewSet(
             # Check if it exists but is soft-deleted
             try:
                 deleted_obj = queryset.model.all_objects.get(uuid=uuid, is_deleted=True)
-                msg = (
-                    f"This resource (uuid={uuid}) was deleted on "
-                    f"{deleted_obj.deleted_at}. "
-                )
+                msg = f"This resource (uuid={uuid}) was deleted on {deleted_obj.deleted_at}. "
                 raise SoftDeletedResourceError(msg)
             except queryset.model.DoesNotExist as err:
                 msg = f"{queryset.model.__name__} with uuid={uuid} not found."
@@ -337,11 +331,29 @@ class BaseModelViewSet(
 
     @extend_schema(
         summary="Full change history for this record",
+        description="""
+        Returns complete audit trail of all changes made to this record.
+
+        Features:
+        - Field-level change tracking
+        - User attribution for each change
+        - Change reasons (if provided)
+        - Timestamps for all modifications
+        - Supports filtering by date range and user
+
+        Query Parameters:
+        - from_date: ISO datetime to filter history from
+        - to_date: ISO datetime to filter history until
+        - user_email: Filter by specific user who made changes
+        - history_type: Filter by action type (created/updated/deleted)
+        """,
         responses={200: HistoryRecordSerializer(many=True)},
     )
     @action(detail=True, methods=["get"], url_path="history")
     def history(self, request, *args, **kwargs):
         instance = self.get_object()
+
+        # Check if model has history tracking enabled
         if not hasattr(instance, "history"):
             return Response(
                 success_response(
@@ -349,9 +361,134 @@ class BaseModelViewSet(
                     message="History tracking not enabled for this model.",
                 ),
             )
+
+        # Build history queryset with filters
         history_qs = instance.history.all().select_related("history_user")
+
+        # Filter by date range
+        from_date = request.query_params.get("from_date")
+        if from_date:
+            try:
+                from_dt = datetime.fromisoformat(from_date.replace("Z", "+00:00"))
+                history_qs = history_qs.filter(history_date__gte=from_dt)
+            except (ValueError, AttributeError):
+                pass
+
+        to_date = request.query_params.get("to_date")
+        if to_date:
+            try:
+                to_dt = datetime.fromisoformat(to_date.replace("Z", "+00:00"))
+                history_qs = history_qs.filter(history_date__lte=to_dt)
+            except (ValueError, AttributeError):
+                pass
+
+        # Filter by user
+        user_email = request.query_params.get("user_email")
+        if user_email:
+            history_qs = history_qs.filter(history_user__email__icontains=user_email)
+
+        # Filter by history type
+        history_type = request.query_params.get("history_type")
+        if history_type:
+            type_map = {
+                "created": "+",
+                "updated": "~",
+                "deleted": "-",
+            }
+            hist_type_code = type_map.get(history_type.lower())
+            if hist_type_code:
+                history_qs = history_qs.filter(history_type=hist_type_code)
+
+        # Paginate if there are many history records
+        page = self.paginate_queryset(history_qs)
+        if page is not None:
+            serializer = HistoryRecordSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
         serializer = HistoryRecordSerializer(history_qs, many=True)
         return Response(success_response(serializer.data))
+
+    @extend_schema(
+        summary="Revert record to a specific historical version",
+        description="""
+        Reverts the record to a previous state from history.
+
+        This creates a new history entry showing the revert action.
+        Requires staff/admin permissions.
+
+        Body:
+        - history_id: The history record ID to revert to
+        - reason: Optional reason for the revert (recommended for audit trail)
+        """,
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {
+                    "history_id": {"type": "integer"},
+                    "reason": {"type": "string"},
+                },
+                "required": ["history_id"],
+            },
+        },
+        responses={200: {"description": "Record reverted successfully"}},
+    )
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="revert",
+        permission_classes=[IsSuperAdmin],
+    )
+    @transaction.atomic
+    def revert_to_version(self, request, *args, **kwargs):
+        instance = self.get_object()
+
+        if not hasattr(instance, "history"):
+            return Response(
+                {"error": "History tracking not enabled for this model."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        history_id = request.data.get("history_id")
+        reason = request.data.get("reason", "Reverted to previous version")
+
+        if not history_id:
+            return Response(
+                {"error": "history_id is required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            historical_record = instance.history.get(history_id=history_id)
+        except instance.history.model.DoesNotExist:
+            return Response(
+                {"error": "Historical record not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Revert to that version
+        historical_record.instance.save()
+
+        # Add change reason
+        if hasattr(instance, "_change_reason"):
+            instance._change_reason = reason  # noqa: SLF001
+            instance.save()
+
+        logger.info(
+            "REVERTED %s uuid=%s to history_id=%s by user=%s reason=%s",
+            instance.__class__.__name__,
+            instance.uuid,
+            history_id,
+            request.user.id,
+            reason,
+        )
+
+        serializer = self.get_serializer(instance)
+        return Response(
+            success_response(
+                serializer.data,
+                message=f"Record reverted to version from {historical_record.history_date}",
+            ),
+        )
 
     # ── Bulk soft-delete ──────────────────────────────────────────────────────
 
