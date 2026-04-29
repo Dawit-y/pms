@@ -5,6 +5,7 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
+from django.utils.csp import CSP
 
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 # pms_api/
@@ -136,6 +137,7 @@ AUTH_PASSWORD_VALIDATORS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "django.middleware.csp.ContentSecurityPolicyMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
@@ -191,6 +193,7 @@ TEMPLATES = [
                 "django.template.context_processors.static",
                 "django.template.context_processors.tz",
                 "django.contrib.messages.context_processors.messages",
+                "django.template.context_processors.csp",  # CSP nonce support
             ],
         },
     },
@@ -212,6 +215,48 @@ SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#x-frame-options
 X_FRAME_OPTIONS = "DENY"
+# https://docs.djangoproject.com/en/dev/ref/settings/#secure-browser-xss-filter
+SECURE_BROWSER_XSS_FILTER = False  # Deprecated, modern browsers ignore this
+# https://docs.djangoproject.com/en/dev/ref/settings/#secure-content-type-nosniff
+SECURE_CONTENT_TYPE_NOSNIFF = True
+# Session security
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = 86400  # 24 hours
+SESSION_SAVE_EVERY_REQUEST = False
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+# CSRF security
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_USE_SESSIONS = False
+# Referrer Policy
+SECURE_REFERRER_POLICY = "same-origin"
+# Permissions Policy - Restrict browser features
+# https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/Permissions-Policy
+PERMISSIONS_POLICY = {
+    "accelerometer": [],
+    "camera": [],
+    "geolocation": [],
+    "gyroscope": [],
+    "magnetometer": [],
+    "microphone": [],
+    "payment": [],
+    "usb": [],
+}
+# Content Security Policy (CSP) - Django 6 built-in
+# https://docs.djangoproject.com/en/6.0/ref/middleware/#content-security-policy
+
+SECURE_CSP = {
+    "default-src": [CSP.SELF],
+    "script-src": [CSP.SELF, CSP.NONCE],  # Nonce for inline scripts
+    "style-src": [CSP.SELF, CSP.UNSAFE_INLINE],  # unsafe-inline needed for admin
+    "img-src": [CSP.SELF, "data:", "https:"],
+    "font-src": [CSP.SELF, "data:"],
+    "connect-src": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],  # Equivalent to X-Frame-Options: DENY
+    "base-uri": [CSP.SELF],
+    "form-action": [CSP.SELF],
+}
 
 # EMAIL
 # ------------------------------------------------------------------------------
@@ -275,6 +320,35 @@ REST_FRAMEWORK = {
         "rest_framework.filters.OrderingFilter",
     ],
     "EXCEPTION_HANDLER": "pms_api.core.exceptions.custom_exception_handler",
+    # API Versioning
+    "DEFAULT_VERSIONING_CLASS": "rest_framework.versioning.URLPathVersioning",
+    "DEFAULT_VERSION": "v1",
+    "ALLOWED_VERSIONS": ["v1"],
+    "VERSION_PARAM": "version",
+    # Throttling - Enterprise-level rate limits
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
+        "pms_api.core.throttling.BurstRateThrottle",
+        "pms_api.core.throttling.SustainedRateThrottle",
+    ],
+    "DEFAULT_THROTTLE_RATES": {
+        "anon": "100/hour",  # Anonymous users: 100 requests per hour
+        "user": "1000/hour",  # Authenticated users: 1000 requests per hour
+        "burst": "60/minute",  # Burst protection: 60 requests per minute
+        "sustained": "10000/day",  # Daily limit: 10000 requests per day
+        "auth": "5/minute",  # Authentication endpoints: 5 attempts per minute
+        "password_reset": "3/hour",  # Password reset: 3 attempts per hour
+        "admin": "2000/hour",  # Admin users: 2000 requests per hour
+    },
+    # Security settings
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+        "rest_framework.parsers.FormParser",
+        "rest_framework.parsers.MultiPartParser",
+    ],
+    # Limit browsable API to development
+    "DEFAULT_METADATA_CLASS": "rest_framework.metadata.SimpleMetadata",
 }
 
 # django-cors-headers - https://github.com/adamchainz/django-cors-headers#setup
@@ -287,7 +361,12 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Documentation of API endpoints of pms",
     "VERSION": "1.0.0",
     "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
-    "SCHEMA_PATH_PREFIX": "/api/",
+    "SCHEMA_PATH_PREFIX": "/api/v1/",
+    "SERVERS": [
+        {"url": "/api/v1", "description": "API Version 1"},
+    ],
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SORT_OPERATIONS": False,
 }
 
 # Simple JWT

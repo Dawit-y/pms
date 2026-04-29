@@ -13,16 +13,16 @@ urlpatterns = [
 ]
 
 urlpatterns += [
-    # API root
-    path("api/", include("config.api_router")),
-    # API Schema and Documentation
+    # API v1 - Versioned API endpoints
+    path("api/v1/", include("config.api_router")),
+    # API Schema and Documentation (versioned)
     path(
-        "api/schema/",
+        "api/v1/schema/",
         SpectacularAPIView.as_view(permission_classes=[IsAuthenticated]),
         name="api-schema",
     ),
     path(
-        "api/docs/",
+        "api/v1/docs/",
         SpectacularSwaggerView.as_view(
             url_name="api-schema",
             permission_classes=[IsAuthenticated],

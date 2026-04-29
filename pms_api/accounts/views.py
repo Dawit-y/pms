@@ -37,6 +37,7 @@ from pms_api.core.pagination import StandardPagination
 from pms_api.core.pagination import success_response
 from pms_api.core.permissions import IsSuperAdmin
 from pms_api.core.permissions import permission_required
+from pms_api.core.throttling import AuthRateThrottle
 from pms_api.core.views import BaseModelViewSet
 from pms_api.core.views import BaseReadOnlyViewSet
 
@@ -65,9 +66,11 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     """
     Custom login view that returns user data and permissions along with tokens.
     Sets refresh token in HTTP-only cookie for security.
+    Rate limited to prevent brute force attacks.
     """
 
     serializer_class = CustomTokenObtainPairSerializer
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
@@ -218,9 +221,13 @@ class MeView(APIView):
 
 
 class ChangePasswordView(APIView):
-    """POST /api/auth/me/change-password/"""
+    """
+    POST /api/auth/me/change-password/
+    Rate limited to prevent brute force attacks.
+    """
 
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AuthRateThrottle]
 
     def post(self, request):
         ser = ChangePasswordSerializer(data=request.data, context={"request": request})
@@ -407,9 +414,7 @@ class UserViewSet(BaseModelViewSet):
         inactive = total - active
         deleted = User.all_objects.filter(is_deleted=True).count()
         by_group = list(
-            User.objects.values("groups__name")
-            .annotate(count=Count("id"))
-            .order_by("-count"),
+            User.objects.values("groups__name").annotate(count=Count("id")).order_by("-count"),
         )
         return Response(
             success_response(

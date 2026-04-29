@@ -1,3 +1,5 @@
+from django.utils.csp import CSP
+
 from .base import *  # noqa: F403
 from .base import DATABASES
 from .base import INSTALLED_APPS
@@ -61,6 +63,33 @@ SECURE_CONTENT_TYPE_NOSNIFF = env.bool(
     "DJANGO_SECURE_CONTENT_TYPE_NOSNIFF",
     default=True,
 )
+# Additional security headers
+SECURE_BROWSER_XSS_FILTER = False  # Deprecated, modern browsers ignore this
+SECURE_REFERRER_POLICY = "same-origin"
+# Session security
+SESSION_COOKIE_SAMESITE = "Strict"
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = "Strict"
+CSRF_COOKIE_HTTPONLY = True
+# Prevent clickjacking
+X_FRAME_OPTIONS = "DENY"
+
+# Content Security Policy (CSP) - Production - Django 6 built-in
+# https://docs.djangoproject.com/en/6.0/ref/middleware/#content-security-policy
+
+SECURE_CSP = {
+    "default-src": [CSP.SELF],
+    "script-src": [CSP.SELF, CSP.NONCE],
+    "style-src": [CSP.SELF],  # Remove unsafe-inline in production if possible
+    "img-src": [CSP.SELF, "data:", "https:"],
+    "font-src": [CSP.SELF],
+    "connect-src": [CSP.SELF],
+    "frame-ancestors": [CSP.NONE],
+    "base-uri": [CSP.SELF],
+    "form-action": [CSP.SELF],
+    "upgrade-insecure-requests": True,
+    "block-all-mixed-content": True,
+}
 
 # STATIC & MEDIA
 # ------------------------
