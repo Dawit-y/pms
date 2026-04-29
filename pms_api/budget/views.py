@@ -75,10 +75,7 @@ class BudgetRequestViewSet(BaseModelViewSet):
 
     def _check_delete_allowed(self, instance):
         if instance.status != "draft":
-            msg = (
-                "Only draft budget requests can be deleted. "
-                f"Current status: {instance.status}."
-            )
+            msg = f"Only draft budget requests can be deleted. Current status: {instance.status}."
             raise BusinessRuleViolation(msg)
 
     def partial_update(self, request, *args, **kwargs):
@@ -104,13 +101,12 @@ class BudgetRequestViewSet(BaseModelViewSet):
         br.submit(submitted_by=request.user)
 
         # Notify department head
-        dept = request.user.department
-        if dept and dept.head_id:
+        dept = getattr(request.user, "department", None)
+        if dept and hasattr(dept, "head_id") and dept.head_id:
             notify(
                 recipient=dept.head,
                 verb=(
-                    f"Budget request for project '{br.project.title}' "
-                    "has been submitted for review"
+                    f"Budget request for project '{br.project.title}' has been submitted for review"
                 ),
                 action_object=br,
                 actor=request.user,
@@ -148,9 +144,12 @@ class BudgetRequestViewSet(BaseModelViewSet):
         last_step = br.forwarding_steps.order_by("-step_number").first()
         step_number = (last_step.step_number + 1) if last_step else 1
 
+        user_dept = getattr(request.user, "department", None)
+        from_dept = br.current_department or user_dept or br.project.implementing_department
+
         BudgetForwardingStep.objects.create(
             budget_request=br,
-            from_department=br.current_department or request.user.department,
+            from_department=from_dept,
             to_department=to_dept,
             action="forwarded",
             acted_by=request.user,
@@ -198,10 +197,12 @@ class BudgetRequestViewSet(BaseModelViewSet):
 
         # Log the approval step
         last_step = br.forwarding_steps.order_by("-step_number").first()
+        user_dept = getattr(request.user, "department", None)
+        dept = br.current_department or user_dept or br.project.implementing_department
         BudgetForwardingStep.objects.create(
             budget_request=br,
-            from_department=br.current_department or request.user.department,
-            to_department=br.current_department or request.user.department,
+            from_department=dept,
+            to_department=dept,
             action="approved",
             acted_by=request.user,
             remarks=ser.validated_data.get("remarks", ""),
@@ -258,10 +259,12 @@ class BudgetRequestViewSet(BaseModelViewSet):
 
         # Log step
         last_step = br.forwarding_steps.order_by("-step_number").first()
+        user_dept = getattr(request.user, "department", None)
+        dept = br.current_department or user_dept or br.project.implementing_department
         BudgetForwardingStep.objects.create(
             budget_request=br,
-            from_department=br.current_department or request.user.department,
-            to_department=br.current_department or request.user.department,
+            from_department=dept,
+            to_department=dept,
             action="rejected",
             acted_by=request.user,
             remarks=ser.validated_data["remarks"],

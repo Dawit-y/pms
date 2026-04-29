@@ -121,18 +121,16 @@ class BudgetRequestCreateSerializer(BaseModelSerializer):
     class Meta:
         model = BudgetRequest
         fields = [
+            "uuid",
             "project",
             "requested_amount",
             "fiscal_year",
             "justification",
         ]
+        read_only_fields = ["uuid"]
 
     def validate_project(self, project):
-        if (
-            BudgetRequest.objects.filter(project=project)
-            .exclude(status="rejected")
-            .exists()
-        ):
+        if BudgetRequest.objects.filter(project=project).exclude(status="rejected").exists():
             msg = "A budget request already exists for this project."
             raise serializers.ValidationError(msg)
         return project

@@ -163,9 +163,7 @@ class ProjectDetailSerializer(BaseModelSerializer):
                 "uuid": str(br.uuid),
                 "status": br.status,
                 "requested_amount": str(br.requested_amount),
-                "approved_amount": str(br.approved_amount)
-                if br.approved_amount
-                else None,
+                "approved_amount": str(br.approved_amount) if br.approved_amount else None,
                 "fiscal_year": br.fiscal_year,
             }
         except Exception:  # noqa: BLE001
@@ -186,6 +184,7 @@ class ProjectCreateSerializer(BaseModelSerializer):
     class Meta:
         model = Project
         fields = [
+            "uuid",
             "code",
             "title",
             "description",
@@ -196,6 +195,7 @@ class ProjectCreateSerializer(BaseModelSerializer):
             "planned_end_date",
             "total_budget",
         ]
+        read_only_fields = ["uuid"]
 
     def validate_code(self, value):
         if Project.objects.filter(code=value).exists():

@@ -33,6 +33,7 @@ dependencies = [
   "hiredis==3.3.1",
   "pillow==12.2.0",
   "psycopg[c]==3.3.3",
+  "pytest-cov>=7.1.0",
   "python-decouple>=3.8",
   "python-slugify==8.0.4",
   "redis==7.4.0",
@@ -126,6 +127,15 @@ lint.ignore = [
   # of types for comparison.
   # Deactivated because it can make the code slow:
   # https://github.com/astral-sh/ruff/issues/7871
+]
+lint.per-file-ignores."**/conftest.py" = [
+  "S106", # Possible hardcoded password (test fixtures)
+]
+# Per-file ignores for test files
+lint.per-file-ignores."**/tests/**/*.py" = [
+  "F841",    # Local variable assigned but never used (test setup)
+  "PLR2004", # Magic value in comparison (test assertions)
+  "S106",    # Possible hardcoded password (test fixtures)
 ]
 lint.isort.force-single-line = true
 
