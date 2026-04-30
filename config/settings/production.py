@@ -170,7 +170,6 @@ LOGGING = {
 # Tools that generate code samples can use SERVERS to point to the correct domain
 SPECTACULAR_SETTINGS["SERVERS"] = [
     {
-        "url": env("DJANGO_ALLOWED_HOSTS", default="https://yourdomain.com"),
         "description": "Production server",
     },
 ]
