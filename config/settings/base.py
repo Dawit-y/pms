@@ -5,7 +5,8 @@ from datetime import timedelta
 from pathlib import Path
 
 import environ
-from django.utils.csp import CSP
+
+# from django.utils.csp import CSP  # Temporarily disabled
 
 BASE_DIR = Path(__file__).resolve(strict=True).parent.parent.parent
 # pms_api/
@@ -137,7 +138,7 @@ AUTH_PASSWORD_VALIDATORS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
-    "django.middleware.csp.ContentSecurityPolicyMiddleware",
+    # "django.middleware.csp.ContentSecurityPolicyMiddleware",  # Temporarily disabled
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.locale.LocaleMiddleware",
@@ -193,7 +194,7 @@ TEMPLATES = [
                 "django.template.context_processors.static",
                 "django.template.context_processors.tz",
                 "django.contrib.messages.context_processors.messages",
-                "django.template.context_processors.csp",  # CSP nonce support
+                # "django.template.context_processors.csp",  # CSP nonce support - Temporarily disabled
             ],
         },
     },
@@ -245,18 +246,19 @@ PERMISSIONS_POLICY = {
 }
 # Content Security Policy (CSP) - Django 6 built-in
 # https://docs.djangoproject.com/en/6.0/ref/middleware/#content-security-policy
+# Temporarily disabled for debugging
 
-SECURE_CSP = {
-    "default-src": [CSP.SELF],
-    "script-src": [CSP.SELF, CSP.NONCE],  # Nonce for inline scripts
-    "style-src": [CSP.SELF, CSP.UNSAFE_INLINE],  # unsafe-inline needed for admin
-    "img-src": [CSP.SELF, "data:", "https:"],
-    "font-src": [CSP.SELF, "data:"],
-    "connect-src": [CSP.SELF],
-    "frame-ancestors": [CSP.NONE],  # Equivalent to X-Frame-Options: DENY
-    "base-uri": [CSP.SELF],
-    "form-action": [CSP.SELF],
-}
+# SECURE_CSP = {
+#     "default-src": [CSP.SELF],
+#     "script-src": [CSP.SELF, CSP.NONCE],  # Nonce for inline scripts
+#     "style-src": [CSP.SELF, CSP.UNSAFE_INLINE],  # unsafe-inline needed for admin
+#     "img-src": [CSP.SELF, "data:", "https:"],
+#     "font-src": [CSP.SELF, "data:"],
+#     "connect-src": [CSP.SELF],
+#     "frame-ancestors": [CSP.NONE],  # Equivalent to X-Frame-Options: DENY
+#     "base-uri": [CSP.SELF],
+#     "form-action": [CSP.SELF],
+# }
 
 # EMAIL
 # ------------------------------------------------------------------------------
@@ -357,16 +359,21 @@ CORS_URLS_REGEX = r"^/api/.*$"
 # By Default swagger ui is available only to admin user(s). You can change permission classes to change that
 # See more configuration options at https://drf-spectacular.readthedocs.io/en/latest/settings.html#settings
 SPECTACULAR_SETTINGS = {
-    "TITLE": "pms API",
-    "DESCRIPTION": "Documentation of API endpoints of pms",
+    "TITLE": "PMS API",
+    "DESCRIPTION": "Documentation of API endpoints of PMS",
     "VERSION": "1.0.0",
-    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"],
-    "SCHEMA_PATH_PREFIX": "/api/v1/",
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],  # Overridden in production
+    "SCHEMA_PATH_PREFIX": "/api/v1",
     "SERVERS": [
-        {"url": "/api/v1", "description": "API Version 1"},
+        {"url": "http://localhost:8000/api/v1", "description": "Local Development"},
     ],
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": False,
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "persistAuthorization": True,
+        "displayOperationId": True,
+    },
 }
 
 # Simple JWT

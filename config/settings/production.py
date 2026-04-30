@@ -1,5 +1,3 @@
-from django.utils.csp import CSP
-
 from .base import *  # noqa: F403
 from .base import DATABASES
 from .base import INSTALLED_APPS
@@ -74,22 +72,6 @@ CSRF_COOKIE_HTTPONLY = True
 # Prevent clickjacking
 X_FRAME_OPTIONS = "DENY"
 
-# Content Security Policy (CSP) - Production - Django 6 built-in
-# https://docs.djangoproject.com/en/6.0/ref/middleware/#content-security-policy
-
-SECURE_CSP = {
-    "default-src": [CSP.SELF],
-    "script-src": [CSP.SELF, CSP.NONCE],
-    "style-src": [CSP.SELF],  # Remove unsafe-inline in production if possible
-    "img-src": [CSP.SELF, "data:", "https:"],
-    "font-src": [CSP.SELF],
-    "connect-src": [CSP.SELF],
-    "frame-ancestors": [CSP.NONE],
-    "base-uri": [CSP.SELF],
-    "form-action": [CSP.SELF],
-    "upgrade-insecure-requests": True,
-    "block-all-mixed-content": True,
-}
 
 # STATIC & MEDIA
 # ------------------------
@@ -186,8 +168,10 @@ LOGGING = {
 # -------------------------------------------------------------------------------
 # Tools that generate code samples can use SERVERS to point to the correct domain
 SPECTACULAR_SETTINGS["SERVERS"] = [
-    {"url": "https://pms.com", "description": "Production server"},
+    {"url": "https://pms.com/api/v1", "description": "Production server"},
 ]
+# Restrict API docs to admin users only in production
+SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"] = ["rest_framework.permissions.IsAdminUser"]
 
 # CORS
 # ------------------------------------------------------------------------------
