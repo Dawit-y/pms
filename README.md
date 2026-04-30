@@ -314,45 +314,6 @@ uv run ruff format .
 uv run mypy pms_api
 ```
 
-## Deployment
-
-### Production Deployment Options
-
-Choose the deployment method that fits your needs:
-
-#### Traditional Deployment (Recommended)
-- [TRADITIONAL_DEPLOYMENT_GUIDE.md](./TRADITIONAL_DEPLOYMENT_GUIDE.md) - Complete Nginx + Gunicorn deployment
-  - **With Domain**: Let's Encrypt SSL (trusted, no warnings)
-  - **With IP Only**: ZeroSSL for trusted SSL certificates (no browser warnings!)
-  - **Quick Demo**: Self-signed SSL option included
-
-#### IP-Based Quick Start (Demo/Testing)
-- [IP_BASED_DEPLOYMENT_QUICKSTART.md](./IP_BASED_DEPLOYMENT_QUICKSTART.md) - Fast deployment using IP address
-  - Get trusted SSL certificate for IP address (ZeroSSL)
-  - No domain name required
-  - Perfect for demos and testing
-  - ~1.5 hours total setup time
-
-#### Docker Deployment (Optional)
-- [DOCKER_PRODUCTION_SETUP.md](./DOCKER_PRODUCTION_SETUP.md) - Production Docker setup
-- [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md) - Complete VPS deployment with CI/CD
-
-### Quick Production Deploy
-
-```bash
-# Build production images
-docker compose -f docker-compose.production.yml build
-
-# Start services
-docker compose -f docker-compose.production.yml up -d
-
-# Run migrations
-docker compose -f docker-compose.production.yml exec django python manage.py migrate
-
-# Create superuser
-docker compose -f docker-compose.production.yml exec django python manage.py createsuperuser
-```
-
 ## Configuration
 
 ### Environment Variables
@@ -375,19 +336,6 @@ See [ENVIRONMENT_VARIABLES_GUIDE.md](./ENVIRONMENT_VARIABLES_GUIDE.md) for compl
 - `config.settings.test` - Testing
 
 Set via `DJANGO_SETTINGS_MODULE` environment variable.
-
-## Documentation
-
-### Available Documentation
-
-- [TRADITIONAL_DEPLOYMENT_GUIDE.md](./TRADITIONAL_DEPLOYMENT_GUIDE.md) - Traditional Nginx + Gunicorn deployment
-- [DOCKER_LOCAL_SETUP.md](./DOCKER_LOCAL_SETUP.md) - Local Docker development (optional)
-- [DOCKER_PRODUCTION_SETUP.md](./DOCKER_PRODUCTION_SETUP.md) - Production Docker setup (optional)
-- [VPS_DEPLOYMENT_GUIDE.md](./VPS_DEPLOYMENT_GUIDE.md) - VPS deployment with CI/CD (Docker-based)
-- [ENVIRONMENT_VARIABLES_GUIDE.md](./ENVIRONMENT_VARIABLES_GUIDE.md) - Environment configuration
-- [SECURITY.md](./SECURITY.md) - Security features and best practices
-- [ENTERPRISE_SECURITY_SUMMARY.md](./ENTERPRISE_SECURITY_SUMMARY.md) - Security summary
-- [DJANGO6_CSP_MIGRATION.md](./DJANGO6_CSP_MIGRATION.md) - CSP migration guide
 
 ### API Documentation
 
@@ -502,12 +450,6 @@ uv run python manage.py migrate --fake-initial
 ## License
 
 Not open source - Proprietary
-
-## Support
-
-For issues and questions:
-- Create an issue in the repository
-- Contact: dawityimer52@gmail.com
 
 ## Acknowledgments
 
