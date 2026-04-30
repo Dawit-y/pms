@@ -168,7 +168,10 @@ LOGGING = {
 # -------------------------------------------------------------------------------
 # Tools that generate code samples can use SERVERS to point to the correct domain
 SPECTACULAR_SETTINGS["SERVERS"] = [
-    {"description": "Production server"},
+    {
+        "url": env("DJANGO_ALLOWED_HOSTS", default="https://yourdomain.com"),
+        "description": "Production server",
+    },
 ]
 # Restrict API docs to admin users only in production
 SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"] = ["rest_framework.permissions.IsAdminUser"]

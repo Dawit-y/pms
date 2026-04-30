@@ -363,9 +363,9 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Documentation of API endpoints of PMS",
     "VERSION": "1.0.0",
     "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],  # Overridden in production
-    "SCHEMA_PATH_PREFIX": "/api/v1",
+    "SCHEMA_PATH_PREFIX": "/api/v1/",
     "SERVERS": [
-        {"url": "http://localhost:8000/api/v1", "description": "Local Development"},
+        {"url": "http://localhost:8000", "description": "Local Development"},
     ],
     "COMPONENT_SPLIT_REQUEST": True,
     "SORT_OPERATIONS": False,

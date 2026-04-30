@@ -13,6 +13,7 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django_filters.rest_framework import DjangoFilterBackend
+from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiParameter
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters
@@ -47,7 +48,10 @@ from .serializers import ChangePasswordSerializer
 from .serializers import ContentTypeSerializer
 from .serializers import CustomTokenObtainPairSerializer
 from .serializers import GroupSerializer
+from .serializers import LoginResponseSerializer
+from .serializers import LogoutResponseSerializer
 from .serializers import PermissionSerializer
+from .serializers import RefreshResponseSerializer
 from .serializers import UserCreateSerializer
 from .serializers import UserDetailSerializer
 from .serializers import UserListSerializer
@@ -71,6 +75,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [AuthRateThrottle]
+    schema = AutoSchema()
 
     @extend_schema(
         summary="Login - Obtain access token",
@@ -79,20 +84,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             "token in response body and refresh token in HTTP-only cookie."
         ),
         request=CustomTokenObtainPairSerializer,
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "access": {"type": "string", "description": "JWT access token"},
-                    "user": {"type": "object", "description": "User profile data"},
-                    "permissions": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of user permissions",
-                    },
-                },
-            },
-        },
+        responses={200: LoginResponseSerializer},
         tags=["Authentication"],
     )
     def post(self, request, *args, **kwargs):
@@ -131,6 +123,8 @@ class CustomTokenRefreshView(TokenRefreshView):
     and returns updated user data and permissions.
     """
 
+    schema = AutoSchema()
+
     @extend_schema(
         summary="Refresh access token",
         description=(
@@ -144,27 +138,7 @@ class CustomTokenRefreshView(TokenRefreshView):
                 "description": "No body required - refresh token is read from cookie",
             },
         },
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "access": {"type": "string", "description": "New JWT access token"},
-                    "user": {"type": "object", "description": "Updated user profile data"},
-                    "permissions": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "description": "List of user permissions",
-                    },
-                },
-            },
-            401: {
-                "type": "object",
-                "properties": {
-                    "detail": {"type": "string"},
-                    "code": {"type": "string"},
-                },
-            },
-        },
+        responses={200: RefreshResponseSerializer},
         tags=["Authentication"],
     )
     def post(self, request, *args, **kwargs):
@@ -227,6 +201,8 @@ class CustomTokenLogoutView(TokenRefreshView):
     Logout view that blacklists the refresh token and clears the cookie.
     """
 
+    schema = AutoSchema()
+
     @extend_schema(
         summary="Logout - Invalidate refresh token",
         description="Logout by blacklisting the refresh token and clearing the HTTP-only cookie.",
@@ -237,20 +213,7 @@ class CustomTokenLogoutView(TokenRefreshView):
                 "description": "No body required - refresh token is read from cookie",
             },
         },
-        responses={
-            200: {
-                "type": "object",
-                "properties": {
-                    "detail": {"type": "string", "example": "Successfully logged out."},
-                },
-            },
-            400: {
-                "type": "object",
-                "properties": {
-                    "detail": {"type": "string", "example": "No active session found."},
-                },
-            },
-        },
+        responses={200: LogoutResponseSerializer},
         tags=["Authentication"],
     )
     def post(self, request, *args, **kwargs):

@@ -1,6 +1,7 @@
 from .base import *  # noqa: F403
 from .base import INSTALLED_APPS
 from .base import MIDDLEWARE
+from .base import REST_FRAMEWORK
 from .base import env
 
 # GENERAL
@@ -79,14 +80,33 @@ INSTALLED_APPS += ["django_extensions"]
 # CORS
 # ------------------------------------------------------------------------------
 # https://github.com/adamchainz/django-cors-headers
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True  # Allow all origins in development
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://localhost:5173",
+    "http://localhost:8000",  # For Swagger UI
     "http://127.0.0.1:3000",
     "http://127.0.0.1:5173",
+    "http://127.0.0.1:8000",  # For Swagger UI
 ]
 CORS_ALLOW_CREDENTIALS = True  # Required for cookies
+
+# CSRF
+# ------------------------------------------------------------------------------
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+# REST Framework - Development overrides
+# ------------------------------------------------------------------------------
+REST_FRAMEWORK = {
+    **REST_FRAMEWORK,
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        # SessionAuthentication removed in development to avoid CSRF issues with Swagger UI
+    ),
+}
 
 # Your stuff...
 # ------------------------------------------------------------------------------

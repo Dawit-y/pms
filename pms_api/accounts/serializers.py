@@ -12,6 +12,37 @@ from pms_api.core.serializers import SoftDeleteSerializer
 User = get_user_model()
 
 
+# ─── Auth Response Serializers ────────────────────────────────────────────────
+
+
+class LoginResponseSerializer(serializers.Serializer):
+    """Response serializer for login endpoint."""
+
+    access = serializers.CharField(help_text="JWT access token")
+    user = serializers.DictField(help_text="User profile data")
+    permissions = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="List of user permissions",
+    )
+
+
+class RefreshResponseSerializer(serializers.Serializer):
+    """Response serializer for token refresh endpoint."""
+
+    access = serializers.CharField(help_text="New JWT access token")
+    user = serializers.DictField(help_text="Updated user profile data")
+    permissions = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="List of user permissions",
+    )
+
+
+class LogoutResponseSerializer(serializers.Serializer):
+    """Response serializer for logout endpoint."""
+
+    detail = serializers.CharField(help_text="Logout status message")
+
+
 # ─── Permission ───────────────────────────────────────────────────────────────
 
 
