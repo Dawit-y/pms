@@ -13,7 +13,6 @@ from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django_filters.rest_framework import DjangoFilterBackend
-from drf_spectacular.openapi import AutoSchema
 from drf_spectacular.utils import OpenApiParameter
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters
@@ -75,7 +74,6 @@ class CustomTokenObtainPairView(TokenObtainPairView):
 
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [AuthRateThrottle]
-    schema = AutoSchema()
 
     @extend_schema(
         summary="Login - Obtain access token",
@@ -122,8 +120,6 @@ class CustomTokenRefreshView(TokenRefreshView):
     Custom token refresh view that retrieves refresh token from cookie
     and returns updated user data and permissions.
     """
-
-    schema = AutoSchema()
 
     @extend_schema(
         summary="Refresh access token",
@@ -200,8 +196,6 @@ class CustomTokenLogoutView(TokenRefreshView):
     """
     Logout view that blacklists the refresh token and clears the cookie.
     """
-
-    schema = AutoSchema()
 
     @extend_schema(
         summary="Logout - Invalidate refresh token",
