@@ -1,3 +1,7 @@
+[build-system]
+build-backend = "setuptools.build_meta"
+requires = [ "setuptools>=68", "wheel" ]
+
 [project]
 name = "pms-api"
 version = "0.1.0"
@@ -62,6 +66,11 @@ dev = [
   "sphinx-autobuild==2025.8.25",
   "werkzeug[watchdog]==3.1.8",
 ]
+
+[tool.setuptools]
+packages.find.where = [ "." ]
+packages.find.include = [ "pms_api*", "config*" ]
+packages.find.exclude = [ "tests*", "compose*", "docs*" ]
 
 [tool.ruff]
 line-length = 100
