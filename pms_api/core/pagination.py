@@ -10,8 +10,8 @@ Every successful response returns:
             "page":     2,
             "pages":    6,
             "per_page": 25,
-            "next":     "https://…?page=3",
-            "previous": "https://…?page=1"
+            "next":     true,         ← boolean: has next page
+            "previous": true          ← boolean: has previous page
         }
     }
 """
@@ -36,8 +36,8 @@ class StandardPagination(PageNumberPagination):
                     "page": self.page.number,
                     "pages": self.page.paginator.num_pages,
                     "per_page": self.get_page_size(self.request),
-                    "next": self.get_next_link(),
-                    "previous": self.get_previous_link(),
+                    "next": self.get_next_link() is not None,
+                    "previous": self.get_previous_link() is not None,
                 },
             },
         )
@@ -55,8 +55,8 @@ class StandardPagination(PageNumberPagination):
                         "page": {"type": "integer"},
                         "pages": {"type": "integer"},
                         "per_page": {"type": "integer"},
-                        "next": {"type": "string", "nullable": True},
-                        "previous": {"type": "string", "nullable": True},
+                        "next": {"type": "boolean"},
+                        "previous": {"type": "boolean"},
                     },
                 },
             },
