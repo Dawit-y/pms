@@ -89,15 +89,28 @@ def custom_exception_handler(exc, context):
         )
 
     code = getattr(exc, "default_code", "ERROR")
-    message = str(exc.detail) if hasattr(exc, "detail") else str(exc)
-    detail = None
 
-    # ValidationError comes with field-level details
-    if isinstance(response.data, dict) and any(
-        isinstance(v, list) for v in response.data.values()
-    ):
-        detail = response.data
-        message = "Validation failed. Check the 'detail' field for field-level errors."
+    # Handle different response data structures
+    if isinstance(response.data, dict):
+        # Check if it's an authentication error with detail and code
+        if "detail" in response.data and "code" in response.data:
+            message = str(response.data["detail"])
+            code = str(response.data["code"]).upper()
+            detail = None
+        # Check for field-level validation errors
+        elif any(isinstance(v, list) for v in response.data.values()):
+            detail = response.data
+            message = "Validation failed. Check the 'detail' field for field-level errors."
+        # Single detail message
+        elif "detail" in response.data:
+            message = str(response.data["detail"])
+            detail = None
+        else:
+            message = str(exc.detail) if hasattr(exc, "detail") else str(exc)
+            detail = None
+    else:
+        message = str(exc.detail) if hasattr(exc, "detail") else str(exc)
+        detail = None
 
     response.data = {
         "success": False,
