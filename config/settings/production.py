@@ -168,7 +168,7 @@ LOGGING = {
 # -------------------------------------------------------------------------------
 # Tools that generate code samples can use SERVERS to point to the correct domain
 SPECTACULAR_SETTINGS["SERVERS"] = [
-    {"url": "https://pms.com/api/v1", "description": "Production server"},
+    {"description": "Production server"},
 ]
 # Restrict API docs to admin users only in production
 SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"] = ["rest_framework.permissions.IsAdminUser"]
@@ -179,7 +179,6 @@ SPECTACULAR_SETTINGS["SERVE_PERMISSIONS"] = ["rest_framework.permissions.IsAdmin
 CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOWED_ORIGINS = env.list(
     "CORS_ALLOWED_ORIGINS",
-    default=["https://pms.com"],
 )
 CORS_ALLOW_CREDENTIALS = True  # Required for cookies
 

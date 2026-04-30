@@ -72,6 +72,29 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer
     throttle_classes = [AuthRateThrottle]
 
+    @extend_schema(
+        summary="Login - Obtain access token",
+        description=(
+            "Authenticate with email and password. Returns access "
+            "token in response body and refresh token in HTTP-only cookie."
+        ),
+        request=CustomTokenObtainPairSerializer,
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "access": {"type": "string", "description": "JWT access token"},
+                    "user": {"type": "object", "description": "User profile data"},
+                    "permissions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of user permissions",
+                    },
+                },
+            },
+        },
+        tags=["Authentication"],
+    )
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
 
@@ -108,6 +131,42 @@ class CustomTokenRefreshView(TokenRefreshView):
     and returns updated user data and permissions.
     """
 
+    @extend_schema(
+        summary="Refresh access token",
+        description=(
+            "Refresh the access token using the refresh token stored in "
+            "HTTP-only cookie. Returns new access token and updated user data."
+        ),
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {},
+                "description": "No body required - refresh token is read from cookie",
+            },
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "access": {"type": "string", "description": "New JWT access token"},
+                    "user": {"type": "object", "description": "Updated user profile data"},
+                    "permissions": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "List of user permissions",
+                    },
+                },
+            },
+            401: {
+                "type": "object",
+                "properties": {
+                    "detail": {"type": "string"},
+                    "code": {"type": "string"},
+                },
+            },
+        },
+        tags=["Authentication"],
+    )
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get("refresh_token")
 
@@ -168,6 +227,32 @@ class CustomTokenLogoutView(TokenRefreshView):
     Logout view that blacklists the refresh token and clears the cookie.
     """
 
+    @extend_schema(
+        summary="Logout - Invalidate refresh token",
+        description="Logout by blacklisting the refresh token and clearing the HTTP-only cookie.",
+        request={
+            "application/json": {
+                "type": "object",
+                "properties": {},
+                "description": "No body required - refresh token is read from cookie",
+            },
+        },
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "detail": {"type": "string", "example": "Successfully logged out."},
+                },
+            },
+            400: {
+                "type": "object",
+                "properties": {
+                    "detail": {"type": "string", "example": "No active session found."},
+                },
+            },
+        },
+        tags=["Authentication"],
+    )
     def post(self, request, *args, **kwargs):
         refresh_token = request.COOKIES.get("refresh_token")
 
@@ -204,10 +289,23 @@ class MeView(APIView):
 
     permission_classes = [IsAuthenticated]
 
+    @extend_schema(
+        summary="Get current user profile",
+        description="Retrieve the authenticated user's full profile information.",
+        responses={200: UserSelfSerializer},
+        tags=["User Profile"],
+    )
     def get(self, request):
         serializer = UserSelfSerializer(request.user, context={"request": request})
         return Response(success_response(serializer.data))
 
+    @extend_schema(
+        summary="Update current user profile",
+        description="Update the authenticated user's profile (non-sensitive fields only).",
+        request=UserSelfSerializer,
+        responses={200: UserSelfSerializer},
+        tags=["User Profile"],
+    )
     def patch(self, request):
         serializer = UserSelfSerializer(
             request.user,
@@ -229,6 +327,23 @@ class ChangePasswordView(APIView):
     permission_classes = [IsAuthenticated]
     throttle_classes = [AuthRateThrottle]
 
+    @extend_schema(
+        summary="Change password",
+        description=(
+            "Change the authenticated user's password. Requires current password for verification."
+        ),
+        request=ChangePasswordSerializer,
+        responses={
+            200: {
+                "type": "object",
+                "properties": {
+                    "success": {"type": "boolean"},
+                    "message": {"type": "string", "example": "Password changed successfully."},
+                },
+            },
+        },
+        tags=["User Profile"],
+    )
     def post(self, request):
         ser = ChangePasswordSerializer(data=request.data, context={"request": request})
         ser.is_valid(raise_exception=True)
