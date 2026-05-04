@@ -3,6 +3,7 @@ from django.urls import path
 
 app_name = "api"
 urlpatterns = [
+    path("", include("pms_api.core.urls")),
     path("", include("pms_api.accounts.urls")),
     path("", include("pms_api.budget.urls")),
     path("", include("pms_api.projects.urls")),
