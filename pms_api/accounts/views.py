@@ -93,6 +93,7 @@ class CustomTokenObtainPairView(TokenObtainPairView):
             user_data = UserListSerializer(user).data
             all_permissions = user.get_all_permissions()
             permissions_list = list(all_permissions)
+            permissions_list.sort()
 
             response.data["user"] = user_data
             response.data["permissions"] = permissions_list
@@ -167,6 +168,7 @@ class CustomTokenRefreshView(TokenRefreshView):
 
                 response_data["user"] = UserListSerializer(user).data
                 response_data["permissions"] = list(user.get_all_permissions())
+                response_data["permissions"].sort()
 
             except (TokenError, ObjectDoesNotExist):
                 return Response(
