@@ -151,6 +151,11 @@ class CustomTokenRefreshView(TokenRefreshView):
 
         try:
             serializer.is_valid(raise_exception=True)
+        except TokenError:
+            return Response(
+                {"detail": "Token is blacklisted or invalid", "code": "token_not_valid"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         except ValidationError:
             return Response(
                 {"detail": "Token is invalid or expired", "code": "token_not_valid"},

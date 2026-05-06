@@ -31,6 +31,7 @@ class LookupTypeSerializer(BaseModelSerializer):
 
 
 class LookupSerializer(BaseModelSerializer):
+    lookup_type_uuid = serializers.UUIDField(source="lookup_type.uuid", read_only=True)
     lookup_type_code = serializers.CharField(source="lookup_type.code", read_only=True)
     lookup_type_name = serializers.CharField(
         source="lookup_type.name_en",
@@ -42,6 +43,7 @@ class LookupSerializer(BaseModelSerializer):
         fields = [
             "id",
             "uuid",
+            "lookup_type_uuid",
             "lookup_type",
             "lookup_type_code",
             "lookup_type_name",
