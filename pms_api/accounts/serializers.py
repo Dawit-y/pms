@@ -73,7 +73,7 @@ class GroupSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
     )
-    user_count = serializers.SerializerMethodField()
+    user_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Group
@@ -84,10 +84,6 @@ class GroupSerializer(serializers.ModelSerializer):
             "permission_ids",
             "user_count",
         ]
-
-    def get_user_count(self, obj) -> int:
-        """Get count of users in this group."""
-        return obj.user_set.count()
 
 
 # ─── User list (lightweight) ──────────────────────────────────────────────────

@@ -9,6 +9,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import transaction
 from django.db.models import Count
+from django.db.models import Prefetch
 from django.utils import timezone
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -568,7 +569,7 @@ class GroupViewSet(viewsets.ModelViewSet):
     so we inherit from ModelViewSet directly instead of BaseModelViewSet.
     """
 
-    queryset = Group.objects.all().prefetch_related("permissions")
+    queryset = Group.objects.all().annotate(user_count=Count("user"))
     serializer_class = GroupSerializer
     pagination_class = StandardPagination
     permission_classes = [IsAuthenticated, IsAdminUser]
@@ -584,6 +585,18 @@ class GroupViewSet(viewsets.ModelViewSet):
     search_fields = ["name"]
     ordering_fields = ["id", "name"]
     ordering = ["name"]
+
+    def get_queryset(self):
+        return (
+            super()
+            .get_queryset()
+            .prefetch_related(
+                Prefetch(
+                    "permissions",
+                    queryset=Permission.objects.select_related("content_type"),
+                ),
+            )
+        )
 
     def list(self, request, *args, **kwargs):
         qs = self.filter_queryset(self.get_queryset())
