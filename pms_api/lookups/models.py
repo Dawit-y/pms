@@ -2,6 +2,7 @@ from django.db import models
 from mptt.models import MPTTModel
 from mptt.models import TreeForeignKey
 
+from pms_api.core.managers import CachedManager
 from pms_api.core.models.base import BaseModel
 
 
@@ -16,6 +17,9 @@ class LookupType(BaseModel):
     name_am = models.CharField(max_length=255, blank=True)  # Amharic
     name_or = models.CharField(max_length=255, blank=True)  # Oromiffa
     is_active = models.BooleanField(default=True)
+
+    # Lookup data changes rarely; cache for an hour by default.
+    objects = CachedManager(timeout=60 * 60)
 
     def __str__(self):
         return self.name_en
@@ -42,6 +46,8 @@ class Lookup(BaseModel):
         null=True,
         blank=True,
     )  # for special lookups with extra attributes
+
+    objects = CachedManager(timeout=60 * 60)
 
     class Meta:
         unique_together = [("lookup_type", "code")]
@@ -75,6 +81,8 @@ class Location(MPTTModel, BaseModel):
         related_name="children",
     )
 
+    objects = CachedManager(timeout=60 * 60)
+
     class MPTTMeta:
         order_insertion_by = ["name_en"]
 
@@ -99,6 +107,8 @@ class Department(MPTTModel, BaseModel):
         blank=True,
         related_name="children",
     )
+
+    objects = CachedManager(timeout=60 * 60)
 
     class MPTTMeta:
         order_insertion_by = ["name_en"]

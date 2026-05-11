@@ -10,6 +10,7 @@ from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from pms_api.core.cache import cache_value
 from pms_api.core.exceptions import BusinessRuleViolation
 from pms_api.core.exceptions import ResourceNotFound
 from pms_api.core.pagination import success_response
@@ -177,6 +178,9 @@ class LookupViewSet(BaseModelViewSet):
             Lookup.objects.filter(uuid=item["uuid"]).update(
                 sort_order=item["sort_order"],
             )
+        # QuerySet.update bypasses signals, so the CachedManager doesn't see
+        # this mutation — invalidate the model's cache manually.
+        Lookup.objects.invalidate()
         return Response(success_response(message="Order updated."))
 
 
@@ -231,10 +235,15 @@ class LocationViewSet(BaseModelViewSet):
     @extend_schema(summary="Return the full location tree (roots + nested children)")
     @action(detail=False, methods=["get"], url_path="tree")
     def tree(self, request, *args, **kwargs):
-        # Fetch the entire tree in one query, then walk in Python via _cached_children.
-        qs = Location.objects.all().order_by("tree_id", "lft")
-        roots = get_cached_trees(qs)
-        return Response(success_response(LocationTreeSerializer(roots, many=True).data))
+        # Cached under the Location model's version — any save/delete on a
+        # Location bumps the version and orphans this entry automatically.
+        def _build():
+            qs = Location.objects.all().order_by("tree_id", "lft")
+            roots = get_cached_trees(qs)
+            return LocationTreeSerializer(roots, many=True).data
+
+        data = cache_value("tree", producer=_build, namespace=Location, timeout=60 * 60)
+        return Response(success_response(data))
 
     # ── Direct children ───────────────────────────────────────────────────────
 
@@ -324,12 +333,13 @@ class DepartmentViewSet(BaseModelViewSet):
     @extend_schema(summary="Full department hierarchy tree")
     @action(detail=False, methods=["get"], url_path="tree")
     def tree(self, request, *args, **kwargs):
-        # Fetch the entire tree in one query, then walk in Python via _cached_children.
-        qs = Department.objects.all().order_by("tree_id", "lft")
-        roots = get_cached_trees(qs)
-        return Response(
-            success_response(DepartmentTreeSerializer(roots, many=True).data),
-        )
+        def _build():
+            qs = Department.objects.all().order_by("tree_id", "lft")
+            roots = get_cached_trees(qs)
+            return DepartmentTreeSerializer(roots, many=True).data
+
+        data = cache_value("tree", producer=_build, namespace=Department, timeout=60 * 60)
+        return Response(success_response(data))
 
     # ── Children ──────────────────────────────────────────────────────────────
 

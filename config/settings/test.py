@@ -26,6 +26,16 @@ PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 # https://docs.djangoproject.com/en/dev/ref/settings/#email-backend
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
 
+# CACHES
+# ------------------------------------------------------------------------------
+# Override the Redis backend from base.py so tests don't need a Redis server.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "pms-test",
+    },
+}
+
 # DEBUGGING FOR TEMPLATES
 # ------------------------------------------------------------------------------
 TEMPLATES[0]["OPTIONS"]["debug"] = True  # type: ignore[index]

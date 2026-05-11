@@ -307,8 +307,34 @@ LOGGING = {
     "root": {"level": "INFO", "handlers": ["console"]},
 }
 
-REDIS_URL = env("REDIS_URL", default="redis://redis:6379/0")
+REDIS_URL = env("REDIS_URL", default="redis://127.0.0.1:6379/0")
 REDIS_SSL = REDIS_URL.startswith("rediss://")
+
+# CACHES
+# ------------------------------------------------------------------------------
+# Redis-backed cache shared by every environment. Test settings override this
+# to a local-memory backend so tests don't need a running Redis.
+# IGNORE_EXCEPTIONS=True means the app falls through to the database when Redis
+# is unreachable rather than raising — the cache is a speedup, not a hard dep.
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+            "IGNORE_EXCEPTIONS": True,
+            "SOCKET_CONNECT_TIMEOUT": 3,
+            "SOCKET_TIMEOUT": 3,
+            "COMPRESSOR": "django_redis.compressors.zlib.ZlibCompressor",
+            "SERIALIZER": "django_redis.serializers.pickle.PickleSerializer",
+        },
+        "KEY_PREFIX": "pms",
+    },
+}
+DJANGO_REDIS_IGNORE_EXCEPTIONS = True
+
+# Default TTL for the cached model manager (seconds). Models can override.
+CACHE_DEFAULT_TIMEOUT = env.int("CACHE_DEFAULT_TIMEOUT", default=60 * 15)
 
 # django-rest-framework
 # -------------------------------------------------------------------------------
