@@ -26,14 +26,18 @@ Every feature is implemented here ONCE so app-level ViewSets get it for free:
 import logging
 from functools import cache
 
+import django_filters
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
+from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
+from rest_framework import filters
 from rest_framework import mixins
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -41,6 +45,7 @@ from pms_api.lookups.models import Department
 
 from .exceptions import ResourceNotFound
 from .exceptions import SoftDeletedResourceError
+from .models.access_log import AccessLog
 from .models.notifications import Notification
 from .pagination import StandardPagination
 from .pagination import success_response
@@ -472,3 +477,140 @@ class NotificationViewSet(
     def unread_count(self, request, *args, **kwargs):
         count = self.get_queryset().filter(is_read=False).count()
         return Response(success_response({"unread_count": count}))
+
+
+# ─── AccessLog ViewSet (admin audit trail) ────────────────────────────────────
+
+
+class AccessLogFilter(django_filters.FilterSet):
+    """
+    Filters for the AccessLog list endpoint. Date range filters use
+    ISO-8601 timestamps (e.g. ?from=2026-05-01T00:00:00Z).
+    """
+
+    user = django_filters.NumberFilter(field_name="user_id")
+    user_email = django_filters.CharFilter(
+        field_name="user__email",
+        lookup_expr="iexact",
+    )
+    endpoint = django_filters.CharFilter(field_name="endpoint", lookup_expr="icontains")
+    method = django_filters.CharFilter(field_name="method", lookup_expr="iexact")
+    status_min = django_filters.NumberFilter(
+        field_name="response_status",
+        lookup_expr="gte",
+    )
+    status_max = django_filters.NumberFilter(
+        field_name="response_status",
+        lookup_expr="lte",
+    )
+    ip_address = django_filters.CharFilter(field_name="ip_address", lookup_expr="exact")
+    # `from` is a Python keyword — declare as `from_` and remap the incoming
+    # query param in __init__ so the URL stays ?from=… for the caller.
+    from_ = django_filters.IsoDateTimeFilter(field_name="timestamp", lookup_expr="gte")
+    to = django_filters.IsoDateTimeFilter(field_name="timestamp", lookup_expr="lte")
+
+    class Meta:
+        model = AccessLog
+        fields = [
+            "user",
+            "user_email",
+            "endpoint",
+            "method",
+            "status_min",
+            "status_max",
+            "ip_address",
+            "from_",
+            "to",
+        ]
+
+    def __init__(self, data=None, *args, **kwargs):
+        # Map the `from` query parameter onto the `from_` filter so callers
+        # can write `?from=…&to=…` without bumping into the Python keyword.
+        if data is not None and "from" in data and "from_" not in data:
+            data = data.copy()
+            data["from_"] = data["from"]
+        super().__init__(data, *args, **kwargs)
+
+
+class AccessLogViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewsets.GenericViewSet):
+    """
+    Admin-only audit trail of authenticated POST/PUT/PATCH/DELETE requests.
+
+    GET /access-logs/                 → paginated list
+    GET /access-logs/{id}/            → single entry
+    GET /access-logs/stats/           → aggregate counts grouped by method/status
+
+    Common filters (all optional):
+        ?user=<id>                    by user pk
+        ?user_email=<email>           by user email (case-insensitive exact)
+        ?method=POST                  by HTTP method
+        ?endpoint=projects            substring match against the URL path
+        ?status_min=400&status_max=499  only client-error responses
+        ?ip_address=1.2.3.4           by source IP
+        ?from=2026-05-01T00:00:00Z&to=2026-05-02T00:00:00Z   time window
+        ?search=...                   full-text against endpoint / user_agent / email
+        ?ordering=-duration_ms        sort (default: -timestamp)
+    """
+
+    pagination_class = StandardPagination
+    permission_classes = [IsAuthenticated, IsAdminUser]
+    lookup_field = "pk"
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_class = AccessLogFilter
+    search_fields = ["endpoint", "user_agent", "user__email"]
+    ordering_fields = ["timestamp", "duration_ms", "response_status"]
+    ordering = ["-timestamp"]
+
+    def get_queryset(self):
+        return AccessLog.objects.select_related("user").order_by("-timestamp")
+
+    def get_serializer_class(self):
+        # Import here to avoid pulling accounts.serializers at module load time.
+        from pms_api.accounts.serializers import AccessLogSerializer  # noqa: PLC0415
+
+        return AccessLogSerializer
+
+    def list(self, request, *args, **kwargs):
+        qs = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(qs)
+        ser_cls = self.get_serializer_class()
+        if page is not None:
+            return self.get_paginated_response(ser_cls(page, many=True).data)
+        return Response(success_response(ser_cls(qs, many=True).data))
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        ser_cls = self.get_serializer_class()
+        return Response(success_response(ser_cls(instance).data))
+
+    @extend_schema(summary="Aggregate stats over the current filter")
+    @action(detail=False, methods=["get"], url_path="stats")
+    def stats(self, request, *args, **kwargs):
+        from django.db.models import Count  # noqa: PLC0415
+
+        qs = self.filter_queryset(self.get_queryset())
+        total = qs.count()
+        by_method = list(qs.values("method").annotate(count=Count("id")).order_by("-count"))
+        by_status = list(
+            qs.values("response_status").annotate(count=Count("id")).order_by("-count"),
+        )
+        top_endpoints = list(
+            qs.values("endpoint").annotate(count=Count("id")).order_by("-count")[:20],
+        )
+        top_users = list(
+            qs.exclude(user__isnull=True)
+            .values("user_id", "user__email")
+            .annotate(count=Count("id"))
+            .order_by("-count")[:20],
+        )
+        return Response(
+            success_response(
+                {
+                    "total": total,
+                    "by_method": by_method,
+                    "by_status": by_status,
+                    "top_endpoints": top_endpoints,
+                    "top_users": top_users,
+                },
+            ),
+        )
