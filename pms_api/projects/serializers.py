@@ -170,13 +170,15 @@ class ProjectDetailSerializer(BaseModelSerializer):
             return None
 
     def get_recent_status_history(self, obj) -> list:
-        history = obj.status_history.order_by("-created_at")[:5]
+        # `status_history` is prefetched ordered by -created_at with changed_by
+        # joined; slicing the prefetched list avoids re-querying.
+        history = list(obj.status_history.all())[:5]
         return ProjectStatusSerializer(history, many=True).data
 
     def get_completion_pct(self, obj) -> float | None:
-        latest = obj.status_history.order_by("-created_at").first()
-        if latest:
-            return float(latest.physical_progress_pct)
+        history = list(obj.status_history.all())
+        if history:
+            return float(history[0].physical_progress_pct)
         return None
 
 

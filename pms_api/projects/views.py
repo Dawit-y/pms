@@ -2,6 +2,7 @@
 
 # Django imports
 from django.db.models import Count
+from django.db.models import Prefetch
 
 # Third-party imports
 from django_filters.rest_framework import DjangoFilterBackend
@@ -84,8 +85,16 @@ class ProjectViewSet(BaseModelViewSet):
                 "current_status",
                 "created_by",
                 "updated_by",
+                "budget_request",
             )
-            .prefetch_related("status_history")
+            .prefetch_related(
+                Prefetch(
+                    "status_history",
+                    queryset=ProjectStatus.objects.select_related("changed_by").order_by(
+                        "-created_at",
+                    ),
+                ),
+            )
             .order_by("-created_at")
         )
 
@@ -132,10 +141,7 @@ class ProjectViewSet(BaseModelViewSet):
         if project.owner_id:
             notify(
                 recipient=project.owner,
-                verb=(
-                    f"Project '{project.title}' status updated to"
-                    f" '{status_record.status}'",
-                ),
+                verb=(f"Project '{project.title}' status updated to '{status_record.status}'",),
                 action_object=project,
                 actor=request.user,
             )
@@ -186,9 +192,7 @@ class ProjectViewSet(BaseModelViewSet):
                 "uuid": str(project.uuid),
                 "code": project.code,
                 "title": project.title,
-                "status": project.current_status.status
-                if project.current_status_id
-                else None,
+                "status": project.current_status.status if project.current_status_id else None,
                 "is_active": project.is_active,
             },
             "budget": budget_info,
@@ -220,14 +224,10 @@ class ProjectViewSet(BaseModelViewSet):
         total = qs.count()
         active = qs.filter(is_active=True).count()
         by_status = list(
-            qs.values("current_status__status")
-            .annotate(count=Count("id"))
-            .order_by("-count"),
+            qs.values("current_status__status").annotate(count=Count("id")).order_by("-count"),
         )
         by_type = list(
-            qs.values("project_type__name_en")
-            .annotate(count=Count("id"))
-            .order_by("-count"),
+            qs.values("project_type__name_en").annotate(count=Count("id")).order_by("-count"),
         )
         return Response(
             success_response(
@@ -285,8 +285,5 @@ class ProjectStatusViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         return (
-            super()
-            .get_queryset()
-            .select_related("project", "changed_by")
-            .order_by("-created_at")
+            super().get_queryset().select_related("project", "changed_by").order_by("-created_at")
         )

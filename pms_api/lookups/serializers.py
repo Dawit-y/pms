@@ -8,7 +8,7 @@ from pms_api.lookups.models import LookupType
 
 
 class LookupTypeSerializer(BaseModelSerializer):
-    lookup_count = serializers.SerializerMethodField()
+    lookup_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = LookupType
@@ -25,9 +25,6 @@ class LookupTypeSerializer(BaseModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["uuid", "created_at", "updated_at"]
-
-    def get_lookup_count(self, obj) -> int:
-        return obj.lookups.filter(is_active=True).count()
 
 
 class LookupSerializer(BaseModelSerializer):
@@ -80,7 +77,11 @@ class LookupSerializer(BaseModelSerializer):
 
 
 class LocationTreeSerializer(serializers.Serializer):
-    """Recursive serializer for the full location tree."""
+    """Recursive serializer for the full location tree.
+
+    Pair with `mptt.utils.get_cached_trees(qs)` in the view so per-node
+    children are walked from `_cached_children` (no SQL during recursion).
+    """
 
     id = serializers.IntegerField()
     uuid = serializers.UUIDField()
@@ -92,9 +93,8 @@ class LocationTreeSerializer(serializers.Serializer):
     children = serializers.SerializerMethodField()
 
     def get_children(self, obj) -> list:
-        if obj.get_children().exists():
-            return LocationTreeSerializer(obj.get_children(), many=True).data
-        return []
+        children = obj.get_cached_children()
+        return LocationTreeSerializer(children, many=True).data if children else []
 
 
 class LocationSerializer(BaseModelSerializer):
@@ -103,7 +103,7 @@ class LocationSerializer(BaseModelSerializer):
         read_only=True,
         default=None,
     )
-    children_count = serializers.SerializerMethodField()
+    children_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Location
@@ -123,15 +123,16 @@ class LocationSerializer(BaseModelSerializer):
         ]
         read_only_fields = ["uuid", "created_at", "updated_at"]
 
-    def get_children_count(self, obj) -> int:
-        return obj.get_children().count()
-
 
 # ─── Hierarchical: Department ─────────────────────────────────────────────────
 
 
 class DepartmentTreeSerializer(serializers.Serializer):
-    """Recursive tree serializer for departments."""
+    """Recursive tree serializer for departments.
+
+    Pair with `mptt.utils.get_cached_trees(qs)` in the view so per-node
+    children are walked from `_cached_children` (no SQL during recursion).
+    """
 
     id = serializers.IntegerField()
     uuid = serializers.UUIDField()
@@ -142,9 +143,8 @@ class DepartmentTreeSerializer(serializers.Serializer):
     children = serializers.SerializerMethodField()
 
     def get_children(self, obj) -> list:
-        if obj.get_children().exists():
-            return DepartmentTreeSerializer(obj.get_children(), many=True).data
-        return []
+        children = obj.get_cached_children()
+        return DepartmentTreeSerializer(children, many=True).data if children else []
 
 
 class DepartmentSerializer(BaseModelSerializer):
@@ -153,7 +153,7 @@ class DepartmentSerializer(BaseModelSerializer):
         read_only=True,
         default=None,
     )
-    children_count = serializers.SerializerMethodField()
+    children_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Department
@@ -171,6 +171,3 @@ class DepartmentSerializer(BaseModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["uuid", "created_at", "updated_at"]
-
-    def get_children_count(self, obj) -> int:
-        return obj.get_children().count()

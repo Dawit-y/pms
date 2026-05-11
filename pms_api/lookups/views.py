@@ -1,7 +1,10 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Count
+from django.db.models import Q
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
+from mptt.utils import get_cached_trees
 from rest_framework import filters
 from rest_framework import status
 from rest_framework.decorators import action
@@ -55,7 +58,14 @@ class LookupTypeViewSet(BaseModelViewSet):
     queryset = LookupType.all_objects.all()
 
     def get_queryset(self):
-        return super().get_queryset().prefetch_related("lookups").order_by("code")
+        return (
+            super()
+            .get_queryset()
+            .annotate(
+                lookup_count=Count("lookups", filter=Q(lookups__is_active=True)),
+            )
+            .order_by("code")
+        )
 
     def _check_delete_allowed(self, instance):
         if instance.lookups.filter(is_active=True).exists():
@@ -139,10 +149,7 @@ class LookupViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         return (
-            super()
-            .get_queryset()
-            .select_related("lookup_type")
-            .order_by("sort_order", "name_en")
+            super().get_queryset().select_related("lookup_type").order_by("sort_order", "name_en")
         )
 
     # ── Reorder values ────────────────────────────────────────────────────────
@@ -201,7 +208,11 @@ class LocationViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         return (
-            super().get_queryset().select_related("parent").order_by("tree_id", "lft")
+            super()
+            .get_queryset()
+            .select_related("parent")
+            .annotate(children_count=Count("children"))
+            .order_by("tree_id", "lft")
         )
 
     def _check_delete_allowed(self, instance):
@@ -220,7 +231,9 @@ class LocationViewSet(BaseModelViewSet):
     @extend_schema(summary="Return the full location tree (roots + nested children)")
     @action(detail=False, methods=["get"], url_path="tree")
     def tree(self, request, *args, **kwargs):
-        roots = self.get_queryset().filter(parent__isnull=True).order_by("name_en")
+        # Fetch the entire tree in one query, then walk in Python via _cached_children.
+        qs = Location.objects.all().order_by("tree_id", "lft")
+        roots = get_cached_trees(qs)
         return Response(success_response(LocationTreeSerializer(roots, many=True).data))
 
     # ── Direct children ───────────────────────────────────────────────────────
@@ -294,7 +307,11 @@ class DepartmentViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         return (
-            super().get_queryset().select_related("parent").order_by("tree_id", "lft")
+            super()
+            .get_queryset()
+            .select_related("parent")
+            .annotate(children_count=Count("children"))
+            .order_by("tree_id", "lft")
         )
 
     def _check_delete_allowed(self, instance):
@@ -307,7 +324,9 @@ class DepartmentViewSet(BaseModelViewSet):
     @extend_schema(summary="Full department hierarchy tree")
     @action(detail=False, methods=["get"], url_path="tree")
     def tree(self, request, *args, **kwargs):
-        roots = self.get_queryset().filter(parent__isnull=True).order_by("name_en")
+        # Fetch the entire tree in one query, then walk in Python via _cached_children.
+        qs = Department.objects.all().order_by("tree_id", "lft")
+        roots = get_cached_trees(qs)
         return Response(
             success_response(DepartmentTreeSerializer(roots, many=True).data),
         )

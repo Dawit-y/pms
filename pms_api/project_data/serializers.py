@@ -98,7 +98,7 @@ class ContractorSerializer(BaseModelSerializer):
         source="contractor_type.name_en",
         read_only=True,
     )
-    assignment_count = serializers.SerializerMethodField()
+    assignment_count = serializers.IntegerField(read_only=True, default=0)
 
     class Meta:
         model = Contractor
@@ -120,9 +120,6 @@ class ContractorSerializer(BaseModelSerializer):
             "updated_at",
         ]
         read_only_fields = ["uuid", "created_at", "updated_at"]
-
-    def get_assignment_count(self, obj) -> int:
-        return obj.assignments.filter(project__is_deleted=False).count()
 
 
 # ─── ContractorAssignment Serializers ─────────────────────────────────────────
@@ -159,7 +156,8 @@ class ContractorAssignmentSerializer(BaseModelSerializer):
         read_only_fields = ["uuid", "created_at", "updated_at"]
 
     def get_total_payments(self, obj) -> str:
-        total = sum(p.amount for p in obj.payments.filter(is_approved=True))
+        # Populated by an annotation on the viewset queryset; falls back to 0.
+        total = getattr(obj, "approved_payments_total", None) or 0
         return str(total)
 
 
@@ -271,8 +269,7 @@ class EvaluationSerializer(BaseModelSerializer):
 
     def get_evaluator_name(self, obj) -> str:
         return (
-            f"{obj.evaluator.first_name} {obj.evaluator.last_name}".strip()
-            or obj.evaluator.email
+            f"{obj.evaluator.first_name} {obj.evaluator.last_name}".strip() or obj.evaluator.email
         )
 
 

@@ -365,10 +365,15 @@ class UserViewSet(BaseModelViewSet):
     queryset = User.all_objects.all()
 
     def get_queryset(self):
+        permissions_qs = Permission.objects.select_related("content_type")
         return (
             super()
             .get_queryset()
-            .prefetch_related("groups", "groups__permissions", "user_permissions")
+            .prefetch_related(
+                "groups",
+                Prefetch("groups__permissions", queryset=permissions_qs),
+                Prefetch("user_permissions", queryset=permissions_qs),
+            )
             .order_by("-created_at")
         )
 
@@ -478,9 +483,11 @@ class UserViewSet(BaseModelViewSet):
         days = int(request.query_params.get("days", 30))
         since = timezone.now() - timedelta(days=days)
 
-        logs = AccessLog.objects.filter(user=user, timestamp__gte=since).order_by(
-            "-timestamp",
-        )[:200]
+        logs = (
+            AccessLog.objects.filter(user=user, timestamp__gte=since)
+            .select_related("user")
+            .order_by("-timestamp")[:200]
+        )
         ser = AccessLogSerializer(logs, many=True)
         return Response(success_response(ser.data))
 
@@ -643,7 +650,11 @@ class GroupViewSet(viewsets.ModelViewSet):
     def users(self, request, pk=None):
         """Get all users in this group."""
         group = self.get_object()
-        users = group.user_set.all()
+        permissions_qs = Permission.objects.select_related("content_type")
+        users = group.user_set.prefetch_related(
+            "groups",
+            Prefetch("groups__permissions", queryset=permissions_qs),
+        )
 
         serializer = UserListSerializer(users, many=True)
         return Response(success_response(serializer.data))

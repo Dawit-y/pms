@@ -1,4 +1,7 @@
 from django.db import transaction
+from django.db.models import Count
+from django.db.models import Q
+from django.db.models import Sum
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
@@ -134,7 +137,12 @@ class ContractorViewSet(BaseModelViewSet):
             super()
             .get_queryset()
             .select_related("contractor_type")
-            .prefetch_related("assignments")
+            .annotate(
+                assignment_count=Count(
+                    "assignments",
+                    filter=Q(assignments__project__is_deleted=False),
+                ),
+            )
             .order_by("name")
         )
 
@@ -215,7 +223,12 @@ class ContractorAssignmentViewSet(BaseModelViewSet):
             super()
             .get_queryset()
             .select_related("project", "contractor", "status")
-            .prefetch_related("payments")
+            .annotate(
+                approved_payments_total=Sum(
+                    "payments__amount",
+                    filter=Q(payments__is_approved=True),
+                ),
+            )
             .order_by("-contract_start")
         )
 
@@ -382,10 +395,7 @@ class RiskViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         return (
-            super()
-            .get_queryset()
-            .select_related("project", "risk_owner")
-            .order_by("-created_at")
+            super().get_queryset().select_related("project", "risk_owner").order_by("-created_at")
         )
 
     @extend_schema(summary="Mark a risk as resolved")
@@ -480,10 +490,7 @@ class IssueViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         return (
-            super()
-            .get_queryset()
-            .select_related("project", "assigned_to")
-            .order_by("-created_at")
+            super().get_queryset().select_related("project", "assigned_to").order_by("-created_at")
         )
 
     @extend_schema(summary="Mark an issue as resolved")
@@ -528,9 +535,4 @@ class ProcurementViewSet(BaseModelViewSet):
     queryset = Procurement.all_objects.all()
 
     def get_queryset(self):
-        return (
-            super()
-            .get_queryset()
-            .select_related("project", "status")
-            .order_by("-created_at")
-        )
+        return super().get_queryset().select_related("project", "status").order_by("-created_at")

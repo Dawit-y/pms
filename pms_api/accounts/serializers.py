@@ -68,7 +68,7 @@ class GroupSerializer(serializers.ModelSerializer):
     permissions = PermissionSerializer(many=True, read_only=True)
     permission_ids = serializers.PrimaryKeyRelatedField(
         many=True,
-        queryset=Permission.objects.all(),
+        queryset=Permission.objects.select_related("content_type"),
         source="permissions",
         write_only=True,
         required=False,

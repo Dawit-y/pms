@@ -69,6 +69,7 @@ class BudgetRequestViewSet(BaseModelViewSet):
             .prefetch_related(
                 "forwarding_steps__from_department",
                 "forwarding_steps__to_department",
+                "forwarding_steps__acted_by",
             )
             .order_by("-created_at")
         )
