@@ -26,7 +26,6 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
-from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -62,6 +61,21 @@ User = get_user_model()
 logger = logging.getLogger(__name__)
 
 
+def _fetch_user_with_perms(user_id):
+    """
+    Single query that pulls a user together with their groups, the
+    permissions attached to those groups, and the related content_types.
+    Used by login/refresh so that UserListSerializer doesn't fan out into
+    a flurry of N+1 lookups when it renders the nested groups payload.
+    """
+    perms_qs = Permission.objects.select_related("content_type")
+    return User.objects.prefetch_related(
+        "groups",
+        Prefetch("groups__permissions", queryset=perms_qs),
+        Prefetch("user_permissions", queryset=perms_qs),
+    ).get(pk=user_id)
+
+
 # ─── Auth views ───────────────────────────────────────────────────────────────
 
 
@@ -87,32 +101,29 @@ class CustomTokenObtainPairView(TokenObtainPairView):
         tags=["Authentication"],
     )
     def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # SimpleJWT sets `serializer.user` during validation — reuse it instead
+        # of doing another User.objects.get(email=...).
+        user = _fetch_user_with_perms(serializer.user.pk)
+        response_data = serializer.validated_data
+        response_data["user"] = UserListSerializer(user).data
+        response_data["permissions"] = user.get_all_permissions_list()
 
-        if response.status_code == status.HTTP_200_OK:
-            user = User.objects.get(email=request.data.get("email"))
-            user_data = UserListSerializer(user).data
-            all_permissions = user.get_all_permissions()
-            permissions_list = list(all_permissions)
-            permissions_list.sort()
+        response = Response(response_data, status=status.HTTP_200_OK)
 
-            response.data["user"] = user_data
-            response.data["permissions"] = permissions_list
-
-            samesite = "Lax" if settings.DEBUG else "None"
-
-            # Set refresh token in HTTP-only cookie
-            refresh_token = response.data.pop("refresh", None)
-            if refresh_token:
-                response.set_cookie(
-                    key="refresh_token",
-                    value=refresh_token,
-                    httponly=True,
-                    secure=not settings.DEBUG,
-                    samesite=samesite,
-                    max_age=7 * 24 * 60 * 60,  # 7 days
-                    path="/",
-                )
+        samesite = "Lax" if settings.DEBUG else "None"
+        refresh_token = response_data.pop("refresh", None)
+        if refresh_token:
+            response.set_cookie(
+                key="refresh_token",
+                value=refresh_token,
+                httponly=True,
+                secure=not settings.DEBUG,
+                samesite=samesite,
+                max_age=7 * 24 * 60 * 60,  # 7 days
+                path="/",
+            )
         return response
 
 
@@ -164,23 +175,21 @@ class CustomTokenRefreshView(TokenRefreshView):
             )
 
         response_data = serializer.validated_data
-        access_token = response_data.get("access")
 
-        if access_token:
-            try:
-                token = AccessToken(access_token)
-                user_id = token.payload.get("user_id")
-                user = User.objects.get(id=user_id)
+        # Decoding the access token we just issued (just to read user_id) is
+        # wasted work — the refresh token we already have in `refresh_token`
+        # carries the same user_id claim, so read it directly.
+        try:
+            user_id = RefreshToken(refresh_token).payload.get("user_id")
+            user = _fetch_user_with_perms(user_id)
+        except (TokenError, ObjectDoesNotExist):
+            return Response(
+                {"detail": "Invalid token user", "code": "token_user_invalid"},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
 
-                response_data["user"] = UserListSerializer(user).data
-                response_data["permissions"] = list(user.get_all_permissions())
-                response_data["permissions"].sort()
-
-            except (TokenError, ObjectDoesNotExist):
-                return Response(
-                    {"detail": "Invalid token user", "code": "token_user_invalid"},
-                    status=status.HTTP_401_UNAUTHORIZED,
-                )
+        response_data["user"] = UserListSerializer(user).data
+        response_data["permissions"] = user.get_all_permissions_list()
 
         response = Response(response_data, status=status.HTTP_200_OK)
         samesite = "Lax" if settings.DEBUG else "None"

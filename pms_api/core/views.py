@@ -24,6 +24,7 @@ Every feature is implemented here ONCE so app-level ViewSets get it for free:
 """
 
 import logging
+from functools import cache
 
 from django.db import transaction
 from django.db.models import Q
@@ -35,6 +36,8 @@ from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+
+from pms_api.lookups.models import Department
 
 from .exceptions import ResourceNotFound
 from .exceptions import SoftDeletedResourceError
@@ -52,6 +55,17 @@ from .serializers import RestoreSerializer
 logger = logging.getLogger(__name__)
 
 
+@cache
+def _model_has_security_fields(model):
+    """
+    Cached check: does this model have an `owner` or `department` column?
+    Result is constant for the lifetime of the process, so the per-request
+    set comprehension over `_meta.get_fields()` was pure waste.
+    """
+    names = {f.name for f in model._meta.get_fields()}  # noqa: SLF001
+    return ("owner" in names) or ("department" in names)
+
+
 # ─── QuerySet mixin: row-level security + deleted filtering ──────────────────
 
 
@@ -67,10 +81,11 @@ class SecureQuerySetMixin:
     def get_queryset(self):
         qs = super().get_queryset()
         request = self.request
+        user = request.user
 
         # ── Deleted filter ────────────────────────────────────────────────────
         include_deleted = request.query_params.get("include_deleted", "false").lower() == "true"
-        if not (include_deleted and (request.user.is_staff or request.user.is_superuser)):
+        if not (include_deleted and (user.is_staff or user.is_superuser)):
             # Default: hide soft-deleted records.
             # (Requires subclasses to use .all_objects as
             # their base queryset so we can filter here)
@@ -80,32 +95,32 @@ class SecureQuerySetMixin:
         # ── Row-level security ────────────────────────────────────────────────
         if not self.row_security_enabled:
             return qs
-        if request.user.is_superuser or request.user.is_staff:
+        if user.is_superuser or user.is_staff:
+            return qs
+        if not _model_has_security_fields(qs.model):
             return qs
 
-        # Non-admin: filter by ownership OR department membership
-        user = request.user
-        user_dept = getattr(user, "department_id", None)
-
+        # Non-admin: filter by ownership OR department subtree membership.
         filters = Q(owner=user)
-        if user_dept:
-            # Also grant access to records belonging to the user's department subtree
-            try:
-                dept = user.department
-                dept_ids = dept.get_descendants(include_self=True).values_list(
-                    "id",
-                    flat=True,
-                )
-                filters |= Q(department_id__in=dept_ids)
-            except Exception:  # noqa: BLE001
-                filters |= Q(department_id=user_dept)
+        user_dept_id = getattr(user, "department_id", None)
+        if user_dept_id:
+            # Build a subquery for descendant department ids instead of pulling
+            # the user's department row first. MPTT's tree_id / lft / rght
+            # columns let us scope to the subtree in one SQL statement.
 
-        # Prevents crashes if the model doesn't have owner or department fields.
-        meta_fields = {f.name for f in qs.model._meta.get_fields()}  # noqa: SLF001
-        if "owner" in meta_fields or "department" in meta_fields:
-            qs = qs.filter(filters)
+            dept_row = Department.objects.filter(pk=user_dept_id).values(
+                "tree_id",
+                "lft",
+                "rght",
+            )
+            descendants = Department.objects.filter(
+                tree_id=dept_row.values("tree_id")[:1],
+                lft__gte=dept_row.values("lft")[:1],
+                rght__lte=dept_row.values("rght")[:1],
+            ).values("id")
+            filters |= Q(department_id__in=descendants)
 
-        return qs
+        return qs.filter(filters)
 
 
 # ─── Base ViewSet ─────────────────────────────────────────────────────────────

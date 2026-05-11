@@ -1,5 +1,4 @@
 from .base import *  # noqa: F403
-from .base import DATABASES
 from .base import INSTALLED_APPS
 from .base import REDIS_URL
 from .base import REST_FRAMEWORK
@@ -15,7 +14,7 @@ ALLOWED_HOSTS = env.list("DJANGO_ALLOWED_HOSTS", default=["pms.com"])
 
 # DATABASES
 # ------------------------------------------------------------------------------
-DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
+# CONN_MAX_AGE is now set in base.py; override here only if you need a different value.
 
 # CACHES
 # ------------------------------------------------------------------------------

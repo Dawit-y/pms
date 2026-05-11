@@ -49,7 +49,12 @@ LOCALE_PATHS = [str(BASE_DIR / "locale")]
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#databases
 DATABASES = {"default": env.db("DATABASE_URL")}
-DATABASES["default"]["ATOMIC_REQUESTS"] = True
+# Per-request transactions are disabled: CRUD views opt in via @transaction.atomic.
+# Wrapping every read in a transaction was adding measurable latency to GETs.
+DATABASES["default"]["ATOMIC_REQUESTS"] = False
+# Persistent connections — avoids a fresh TCP/SSL handshake to the DB per request.
+DATABASES["default"]["CONN_MAX_AGE"] = env.int("CONN_MAX_AGE", default=60)
+DATABASES["default"]["CONN_HEALTH_CHECKS"] = True
 # https://docs.djangoproject.com/en/stable/ref/settings/#std:setting-DEFAULT_AUTO_FIELD
 
 # URLS
@@ -328,11 +333,12 @@ REST_FRAMEWORK = {
     "ALLOWED_VERSIONS": ["v1"],
     "VERSION_PARAM": "version",
     # Throttling - Enterprise-level rate limits
+    # BurstRateThrottle / SustainedRateThrottle are kept available for explicit
+    # opt-in on sensitive views, but they're UserRateThrottle subclasses and
+    # running all four globally meant ~16 cache round-trips per request.
     "DEFAULT_THROTTLE_CLASSES": [
         "rest_framework.throttling.AnonRateThrottle",
         "rest_framework.throttling.UserRateThrottle",
-        "pms_api.core.throttling.BurstRateThrottle",
-        "pms_api.core.throttling.SustainedRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "100/hour",  # Anonymous users: 100 requests per hour
