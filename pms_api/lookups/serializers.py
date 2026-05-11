@@ -93,7 +93,9 @@ class LocationTreeSerializer(serializers.Serializer):
     children = serializers.SerializerMethodField()
 
     def get_children(self, obj) -> list:
-        children = obj.get_cached_children()
+        # mptt.utils.get_cached_trees populates `_cached_children` on every
+        # node; leaf nodes won't have the attribute set, hence the default.
+        children = getattr(obj, "_cached_children", [])
         return LocationTreeSerializer(children, many=True).data if children else []
 
 
@@ -143,7 +145,7 @@ class DepartmentTreeSerializer(serializers.Serializer):
     children = serializers.SerializerMethodField()
 
     def get_children(self, obj) -> list:
-        children = obj.get_cached_children()
+        children = getattr(obj, "_cached_children", [])
         return DepartmentTreeSerializer(children, many=True).data if children else []
 
 
