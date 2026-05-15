@@ -3,6 +3,7 @@ from django.contrib.auth.models import Group
 from django.contrib.auth.models import Permission
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Prefetch
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -10,6 +11,29 @@ from pms_api.core.serializers import BaseModelSerializer
 from pms_api.core.serializers import SoftDeleteSerializer
 
 User = get_user_model()
+
+
+# ─── JWT with permissions in payload ─────────────────────────────────────────
+
+# serializers.py
+
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+        token["email"] = user.email
+        return token
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        perms_qs = Permission.objects.select_related("content_type")
+        self.user = User.objects.prefetch_related(
+            "groups",
+            Prefetch("groups__permissions", queryset=perms_qs),
+            Prefetch("user_permissions", queryset=perms_qs),
+        ).get(pk=self.user.pk)
+        return data
 
 
 # ─── Auth Response Serializers ────────────────────────────────────────────────
@@ -306,17 +330,6 @@ class AdminSetPasswordSerializer(serializers.Serializer):
                 {"confirm_password": "Passwords do not match."},
             )
         return data
-
-
-# ─── JWT with permissions in payload ─────────────────────────────────────────
-
-
-class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    @classmethod
-    def get_token(cls, user):
-        token = super().get_token(user)
-        token["email"] = user.email
-        return token
 
 
 # ─── Access log / activity serializer ────────────────────────────────────────

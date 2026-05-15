@@ -56,6 +56,9 @@ class Project(HistoryMixin, BaseModel):
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            ("monitor_project", "Can record monitoring status updates on a project"),
+        ]
 
     def __str__(self):
         return f"{self.code} — {self.title}"

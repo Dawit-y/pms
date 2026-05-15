@@ -12,7 +12,6 @@ from pms_api.budget.models import BudgetRequest
 from pms_api.core.exceptions import BusinessRuleViolation
 from pms_api.core.models.notifications import notify
 from pms_api.core.pagination import success_response
-from pms_api.core.permissions import IsSuperAdmin
 from pms_api.core.permissions import permission_required
 from pms_api.core.views import BaseModelViewSet
 from pms_api.projects.models import ProjectStatus
@@ -44,14 +43,14 @@ class BudgetRequestViewSet(BaseModelViewSet):
     }
     serializer_class = BudgetRequestDetailSerializer
 
-    # Custom action permissions — CRUD handled by StrictDjangoModelPermissions
+    # Custom action permissions — CRUD handled by StrictDjangoModelPermissions.
+    # `restore` is gated by the parent's @action decorator.
     action_permissions = {
         "submit": [permission_required("budget.submit_budgetrequest")],
         "forward": [permission_required("budget.forward_budgetrequest")],
         "approve": [permission_required("budget.approve_budgetrequest")],
         "reject": [permission_required("budget.approve_budgetrequest")],
         "return_for_revision": [permission_required("budget.approve_budgetrequest")],
-        "restore": [IsSuperAdmin],
     }
 
     queryset = BudgetRequest.all_objects.all()

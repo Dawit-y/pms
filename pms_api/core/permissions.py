@@ -71,14 +71,15 @@ def permission_required(*codenames):
 
 class IsOwnerOrAdmin(BasePermission):
     """
-    Object-level. Allows access only to the record owner or superusers/staff.
-    The model must have an `owner` FK (provided by RowLevelSecurityMixin).
+    Object-level. Allows access to the record owner or to users that hold the
+    `accounts.bypass_row_security` permission. The model must have an `owner`
+    FK (provided by RowLevelSecurityMixin).
     """
 
     message = "You do not own this resource."
 
     def has_object_permission(self, request, view, obj):
-        if request.user.is_superuser or request.user.is_staff:
+        if request.user.has_perm("accounts.bypass_row_security"):
             return True
         owner = getattr(obj, "owner", None)
         return owner is not None and owner == request.user
@@ -90,13 +91,14 @@ class IsOwnerOrAdmin(BasePermission):
 class IsDepartmentMemberOrAdmin(BasePermission):
     """
     Object-level. Grants access if the record's `department` is the user's
-    department or an ancestor/descendant (uses MPTT tree queries).
+    department or an ancestor/descendant (uses MPTT tree queries). Users with
+    the `accounts.bypass_row_security` permission see everything.
     """
 
     message = "This resource belongs to a department you don't have access to."
 
     def has_object_permission(self, request, view, obj):
-        if request.user.is_superuser or request.user.is_staff:
+        if request.user.has_perm("accounts.bypass_row_security"):
             return True
         record_dept = getattr(obj, "department", None)
         user_dept = getattr(request.user, "department", None)
@@ -118,9 +120,7 @@ class IsSuperAdmin(BasePermission):
 
     def has_permission(self, request, view):
         return bool(
-            request.user
-            and request.user.is_authenticated
-            and request.user.is_superuser,
+            request.user and request.user.is_authenticated and request.user.is_superuser,
         )
 
 
@@ -147,14 +147,14 @@ class ActionPermissionMixin:
     - Standard CRUD (list/create/update/destroy) → handled by permission_classes
       (e.g. StrictDjangoModelPermissions — auto-checks view/add/change/delete)
     - Custom actions (restore/approve/set-password) → override via action_permissions
-      (e.g. IsSuperAdmin, permission_required('projects.approve_project'))
+      using permission_required('app.codename').
 
     Example:
         class ProjectViewSet(BaseModelViewSet):
             permission_classes = [StrictDjangoModelPermissions]
             action_permissions = {
                 'approve':  [permission_required('projects.approve_project')],
-                'restore':  [IsSuperAdmin],
+                'restore':  [permission_required('accounts.restore_records')],
             }
     """
 

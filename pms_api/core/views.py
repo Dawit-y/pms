@@ -37,7 +37,6 @@ from rest_framework import mixins
 from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAdminUser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
@@ -50,8 +49,8 @@ from .models.notifications import Notification
 from .pagination import StandardPagination
 from .pagination import success_response
 from .permissions import ActionPermissionMixin
-from .permissions import IsSuperAdmin
 from .permissions import StrictDjangoModelPermissions
+from .permissions import permission_required
 from .serializers import BulkDeleteSerializer
 from .serializers import BulkRestoreSerializer
 from .serializers import NotificationSerializer
@@ -90,7 +89,8 @@ class SecureQuerySetMixin:
 
         # ── Deleted filter ────────────────────────────────────────────────────
         include_deleted = request.query_params.get("include_deleted", "false").lower() == "true"
-        if not (include_deleted and (user.is_staff or user.is_superuser)):
+        can_view_deleted = user.is_authenticated and user.has_perm("accounts.view_deleted_records")
+        if not (include_deleted and can_view_deleted):
             # Default: hide soft-deleted records.
             # (Requires subclasses to use .all_objects as
             # their base queryset so we can filter here)
@@ -100,7 +100,7 @@ class SecureQuerySetMixin:
         # ── Row-level security ────────────────────────────────────────────────
         if not self.row_security_enabled:
             return qs
-        if user.is_superuser or user.is_staff:
+        if user.is_authenticated and user.has_perm("accounts.bypass_row_security"):
             return qs
         if not _model_has_security_fields(qs.model):
             return qs
@@ -276,14 +276,18 @@ class BaseModelViewSet(
     # ── Hard delete (superuser only) ──────────────────────────────────────────
 
     @extend_schema(
-        summary="Hard-delete a record permanently (superuser only)",
+        summary="Hard-delete a record permanently",
+        description=(
+            "Requires the `accounts.hard_delete_records` permission. "
+            "Bypasses soft-delete and removes the row from the database."
+        ),
         responses={204: None},
     )
     @action(
         detail=True,
         methods=["delete"],
         url_path="hard-delete",
-        permission_classes=[IsSuperAdmin],
+        permission_classes=[permission_required("accounts.hard_delete_records")],
     )
     @transaction.atomic
     def hard_destroy(self, request, *args, **kwargs):
@@ -305,7 +309,8 @@ class BaseModelViewSet(
     # ── Restore ───────────────────────────────────────────────────────────────
 
     @extend_schema(
-        summary="Restore a soft-deleted record (staff/admin only)",
+        summary="Restore a soft-deleted record",
+        description="Requires the `accounts.restore_records` permission.",
         request=RestoreSerializer,
         responses={200: {"description": "Record restored."}},
     )
@@ -313,7 +318,7 @@ class BaseModelViewSet(
         detail=True,
         methods=["post"],
         url_path="restore",
-        permission_classes=[IsSuperAdmin],
+        permission_classes=[permission_required("accounts.restore_records")],
     )
     @transaction.atomic
     def restore(self, request, *args, **kwargs):
@@ -369,14 +374,15 @@ class BaseModelViewSet(
     # ── Bulk restore ──────────────────────────────────────────────────────────
 
     @extend_schema(
-        summary="Bulk restore soft-deleted records (admin only)",
+        summary="Bulk restore soft-deleted records",
+        description="Requires the `accounts.restore_records` permission.",
         request=BulkRestoreSerializer,
     )
     @action(
         detail=False,
         methods=["post"],
         url_path="bulk-restore",
-        permission_classes=[IsSuperAdmin],
+        permission_classes=[permission_required("accounts.restore_records")],
     )
     @transaction.atomic
     def bulk_restore(self, request, *args, **kwargs):
@@ -553,8 +559,9 @@ class AccessLogViewSet(mixins.ListModelMixin, mixins.RetrieveModelMixin, viewset
     """
 
     pagination_class = StandardPagination
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, StrictDjangoModelPermissions]
     lookup_field = "pk"
+    queryset = AccessLog.objects.none()  # used by StrictDjangoModelPermissions to resolve the model
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = AccessLogFilter
     search_fields = ["endpoint", "user_agent", "user__email"]

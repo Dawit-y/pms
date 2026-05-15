@@ -72,6 +72,14 @@ class BudgetRequest(BaseModel):
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            ("submit_budgetrequest", "Can submit a budget request for review"),
+            ("forward_budgetrequest", "Can forward a budget request to another department"),
+            (
+                "approve_budgetrequest",
+                "Can approve, reject, or return a budget request for revision",
+            ),
+        ]
 
 
 class BudgetForwardingStep(BaseModel):

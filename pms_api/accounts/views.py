@@ -21,11 +21,11 @@ from rest_framework import status
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.exceptions import ValidationError
-from rest_framework.permissions import IsAdminUser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -35,7 +35,7 @@ from pms_api.core.exceptions import ResourceNotFound
 from pms_api.core.models.access_log import AccessLog
 from pms_api.core.pagination import StandardPagination
 from pms_api.core.pagination import success_response
-from pms_api.core.permissions import IsSuperAdmin
+from pms_api.core.permissions import StrictDjangoModelPermissions
 from pms_api.core.permissions import permission_required
 from pms_api.core.throttling import AuthRateThrottle
 from pms_api.core.views import BaseModelViewSet
@@ -63,10 +63,9 @@ logger = logging.getLogger(__name__)
 
 def _fetch_user_with_perms(user_id):
     """
-    Single query that pulls a user together with their groups, the
-    permissions attached to those groups, and the related content_types.
-    Used by login/refresh so that UserListSerializer doesn't fan out into
-    a flurry of N+1 lookups when it renders the nested groups payload.
+    Fetches user with all permission-related data prefetched.
+    Used by the refresh view where we don't go through
+    CustomTokenObtainPairSerializer.validate().
     """
     perms_qs = Permission.objects.select_related("content_type")
     return User.objects.prefetch_related(
@@ -74,9 +73,6 @@ def _fetch_user_with_perms(user_id):
         Prefetch("groups__permissions", queryset=perms_qs),
         Prefetch("user_permissions", queryset=perms_qs),
     ).get(pk=user_id)
-
-
-# ─── Auth views ───────────────────────────────────────────────────────────────
 
 
 @method_decorator(csrf_exempt, name="dispatch")
@@ -103,25 +99,27 @@ class CustomTokenObtainPairView(TokenObtainPairView):
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # SimpleJWT sets `serializer.user` during validation — reuse it instead
-        # of doing another User.objects.get(email=...).
-        user = _fetch_user_with_perms(serializer.user.pk)
+
+        user = serializer.user
+
         response_data = serializer.validated_data
+
         response_data["user"] = UserListSerializer(user).data
         response_data["permissions"] = user.get_all_permissions_list()
 
+        refresh_token = response_data.pop("refresh", None)
+
         response = Response(response_data, status=status.HTTP_200_OK)
 
-        samesite = "Lax" if settings.DEBUG else "None"
-        refresh_token = response_data.pop("refresh", None)
         if refresh_token:
+            samesite = "Lax" if settings.DEBUG else "None"
             response.set_cookie(
                 key="refresh_token",
                 value=refresh_token,
                 httponly=True,
                 secure=not settings.DEBUG,
                 samesite=samesite,
-                max_age=7 * 24 * 60 * 60,  # 7 days
+                max_age=7 * 24 * 60 * 60,
                 path="/",
             )
         return response
@@ -133,6 +131,8 @@ class CustomTokenRefreshView(TokenRefreshView):
     Custom token refresh view that retrieves refresh token from cookie
     and returns updated user data and permissions.
     """
+
+    throttle_classes = [AuthRateThrottle]
 
     @extend_schema(
         summary="Refresh access token",
@@ -176,13 +176,11 @@ class CustomTokenRefreshView(TokenRefreshView):
 
         response_data = serializer.validated_data
 
-        # Decoding the access token we just issued (just to read user_id) is
-        # wasted work — the refresh token we already have in `refresh_token`
-        # carries the same user_id claim, so read it directly.
         try:
-            user_id = RefreshToken(refresh_token).payload.get("user_id")
+            access_token = AccessToken(response_data["access"])
+            user_id = access_token["user_id"]
             user = _fetch_user_with_perms(user_id)
-        except (TokenError, ObjectDoesNotExist):
+        except (TokenError, KeyError, ObjectDoesNotExist):
             return Response(
                 {"detail": "Invalid token user", "code": "token_user_invalid"},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -191,15 +189,15 @@ class CustomTokenRefreshView(TokenRefreshView):
         response_data["user"] = UserListSerializer(user).data
         response_data["permissions"] = user.get_all_permissions_list()
 
-        response = Response(response_data, status=status.HTTP_200_OK)
-        samesite = "Lax" if settings.DEBUG else "None"
+        new_refresh = response_data.pop("refresh", None)
 
-        # Handle refresh token rotation
-        refresh = response_data.pop("refresh", None)
-        if refresh:
+        response = Response(response_data, status=status.HTTP_200_OK)
+
+        if new_refresh:
+            samesite = "Lax" if settings.DEBUG else "None"
             response.set_cookie(
                 key="refresh_token",
-                value=refresh,
+                value=new_refresh,
                 httponly=True,
                 secure=not settings.DEBUG,
                 samesite=samesite,
@@ -209,10 +207,12 @@ class CustomTokenRefreshView(TokenRefreshView):
         return response
 
 
-class CustomTokenLogoutView(TokenRefreshView):
+class CustomTokenLogoutView(APIView):
     """
     Logout view that blacklists the refresh token and clears the cookie.
     """
+
+    throttle_classes = [AuthRateThrottle]
 
     @extend_schema(
         summary="Logout - Invalidate refresh token",
@@ -237,7 +237,6 @@ class CustomTokenLogoutView(TokenRefreshView):
             )
 
         try:
-            # Blacklist the refresh token
             token = RefreshToken(refresh_token)
             token.blacklist()
         except TokenError:
@@ -245,13 +244,11 @@ class CustomTokenLogoutView(TokenRefreshView):
         except Exception:
             logger.exception("Unexpected error while blacklisting token")
 
-        # Create response and clear cookie
         response = Response(
             {"detail": "Successfully logged out."},
             status=status.HTTP_200_OK,
         )
         response.delete_cookie("refresh_token", path="/")
-
         return response
 
 
@@ -359,10 +356,10 @@ class UserViewSet(BaseModelViewSet):
     }
     serializer_class = UserDetailSerializer  # fallback
 
-    # Custom action permissions — CRUD is handled by StrictDjangoModelPermissions
+    # Custom action permissions — CRUD is handled by StrictDjangoModelPermissions.
+    # `restore`, `hard_destroy`, `bulk_restore` are gated by the parent's @action
+    # decorators (accounts.restore_records / accounts.hard_delete_records).
     action_permissions = {
-        "restore": [IsSuperAdmin],
-        "hard_destroy": [IsSuperAdmin],
         "set_password": [permission_required("accounts.manage_user")],
         "activate": [permission_required("accounts.manage_user")],
         "deactivate": [permission_required("accounts.manage_user")],
@@ -390,8 +387,10 @@ class UserViewSet(BaseModelViewSet):
         if instance == self.request.user:
             msg = "You cannot delete your own account."
             raise BusinessRuleViolation(msg)
-        if instance.is_superuser and not self.request.user.is_superuser:
-            msg = "Only superusers can delete superuser accounts."
+        if instance.is_superuser and not self.request.user.has_perm(
+            "accounts.manage_superuser",
+        ):
+            msg = "You need the 'manage_superuser' permission to delete a superuser account."
             raise BusinessRuleViolation(msg)
 
     # ── Admin force-reset password ────────────────────────────────────────────
@@ -430,8 +429,8 @@ class UserViewSet(BaseModelViewSet):
         if user == request.user:
             msg = "You cannot deactivate your own account."
             raise BusinessRuleViolation(msg)
-        if user.is_superuser and not request.user.is_superuser:
-            msg = "Cannot deactivate a superuser account."
+        if user.is_superuser and not request.user.has_perm("accounts.manage_superuser"):
+            msg = "You need the 'manage_superuser' permission to deactivate a superuser account."
             raise BusinessRuleViolation(msg)
         user.is_active = False
         user.updated_by = request.user
@@ -588,7 +587,7 @@ class GroupViewSet(viewsets.ModelViewSet):
     queryset = Group.objects.all().annotate(user_count=Count("user"))
     serializer_class = GroupSerializer
     pagination_class = StandardPagination
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, StrictDjangoModelPermissions]
     lookup_field = "pk"
     filter_backends = [
         DjangoFilterBackend,
@@ -710,7 +709,7 @@ class ContentTypeViewSet(BaseReadOnlyViewSet):
 
     queryset = ContentType.objects.all()
     serializer_class = ContentTypeSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
+    permission_classes = [IsAuthenticated, StrictDjangoModelPermissions]
     lookup_field = "pk"
     filterset_fields = {
         "app_label": ["exact"],

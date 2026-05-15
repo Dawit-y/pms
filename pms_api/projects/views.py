@@ -16,7 +16,6 @@ from rest_framework.response import Response
 from pms_api.core.exceptions import BusinessRuleViolation
 from pms_api.core.models.notifications import notify
 from pms_api.core.pagination import success_response
-from pms_api.core.permissions import IsSuperAdmin
 from pms_api.core.permissions import permission_required
 from pms_api.core.views import BaseModelViewSet
 from pms_api.projects.models import Project
@@ -62,9 +61,9 @@ class ProjectViewSet(BaseModelViewSet):
     }
     serializer_class = ProjectDetailSerializer
 
-    # Custom action permissions — CRUD handled by StrictDjangoModelPermissions
+    # Custom action permissions — CRUD handled by StrictDjangoModelPermissions.
+    # `restore` is gated by the parent's @action decorator.
     action_permissions = {
-        "restore": [IsSuperAdmin],
         "update_status": [permission_required("projects.monitor_project")],
         "status_history": [],  # inherits StrictDjangoModelPermissions (view)
         "dashboard": [],  # inherits StrictDjangoModelPermissions (view)
@@ -275,11 +274,6 @@ class ProjectStatusViewSet(BaseModelViewSet):
         "create": ProjectStatusCreateSerializer,
     }
     serializer_class = ProjectStatusSerializer
-
-    # Custom action permissions — CRUD handled by StrictDjangoModelPermissions
-    action_permissions = {
-        "restore": [IsSuperAdmin],
-    }
 
     queryset = ProjectStatus.all_objects.all()
 

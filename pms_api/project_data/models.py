@@ -79,6 +79,11 @@ class Contractor(BaseModel):
     is_blacklisted = models.BooleanField(default=False)
     blacklist_reason = models.TextField(blank=True)
 
+    class Meta:
+        permissions = [
+            ("blacklist_contractor", "Can blacklist or unblacklist a contractor"),
+        ]
+
     def __str__(self):
         return self.name
 
@@ -132,6 +137,11 @@ class Payment(ProjectDataMixin, BaseModel):
         on_delete=models.SET_NULL,
         related_name="approved_payments",
     )
+
+    class Meta:
+        permissions = [
+            ("approve_payment", "Can approve a contractor payment"),
+        ]
 
     def __str__(self):
         return self.reference_number

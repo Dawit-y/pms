@@ -11,7 +11,7 @@ from rest_framework.response import Response
 
 from pms_api.core.exceptions import BusinessRuleViolation
 from pms_api.core.pagination import success_response
-from pms_api.core.permissions import IsSuperAdmin
+from pms_api.core.permissions import permission_required
 from pms_api.core.views import BaseModelViewSet
 from pms_api.project_data.models import Contractor
 from pms_api.project_data.models import ContractorAssignment
@@ -55,10 +55,6 @@ class ProjectEmployeeViewSet(BaseModelViewSet):
     ordering = ["-start_date"]
     serializer_class = ProjectEmployeeSerializer
 
-    action_permissions = {
-        "restore": [IsSuperAdmin],
-    }
-
     queryset = ProjectEmployee.all_objects.all()
 
     def get_queryset(self):
@@ -88,10 +84,6 @@ class ProjectDocumentViewSet(BaseModelViewSet):
     ordering_fields = ["created_at", "expiry_date"]
     ordering = ["-created_at"]
     serializer_class = ProjectDocumentSerializer
-
-    action_permissions = {
-        "restore": [IsSuperAdmin],
-    }
 
     queryset = ProjectDocument.all_objects.all()
 
@@ -125,9 +117,8 @@ class ContractorViewSet(BaseModelViewSet):
     serializer_class = ContractorSerializer
 
     action_permissions = {
-        "restore": [IsSuperAdmin],
-        "blacklist": [IsSuperAdmin],
-        "unblacklist": [IsSuperAdmin],
+        "blacklist": [permission_required("project_data.blacklist_contractor")],
+        "unblacklist": [permission_required("project_data.blacklist_contractor")],
     }
 
     queryset = Contractor.all_objects.all()
@@ -212,10 +203,6 @@ class ContractorAssignmentViewSet(BaseModelViewSet):
     ordering = ["-contract_start"]
     serializer_class = ContractorAssignmentSerializer
 
-    action_permissions = {
-        "restore": [IsSuperAdmin],
-    }
-
     queryset = ContractorAssignment.all_objects.all()
 
     def get_queryset(self):
@@ -258,8 +245,7 @@ class PaymentViewSet(BaseModelViewSet):
     serializer_class = PaymentSerializer
 
     action_permissions = {
-        "restore": [IsSuperAdmin],
-        "approve": [IsSuperAdmin],
+        "approve": [permission_required("project_data.approve_payment")],
     }
 
     queryset = Payment.all_objects.all()
@@ -317,10 +303,6 @@ class MonitoringVisitViewSet(BaseModelViewSet):
     ordering = ["-visit_date"]
     serializer_class = MonitoringVisitSerializer
 
-    action_permissions = {
-        "restore": [IsSuperAdmin],
-    }
-
     queryset = MonitoringVisit.all_objects.all()
 
     def get_queryset(self):
@@ -351,10 +333,6 @@ class EvaluationViewSet(BaseModelViewSet):
     ordering_fields = ["evaluation_date", "score", "created_at"]
     ordering = ["-evaluation_date"]
     serializer_class = EvaluationSerializer
-
-    action_permissions = {
-        "restore": [IsSuperAdmin],
-    }
 
     queryset = Evaluation.all_objects.all()
 
@@ -387,7 +365,6 @@ class RiskViewSet(BaseModelViewSet):
     serializer_class = RiskSerializer
 
     action_permissions = {
-        "restore": [IsSuperAdmin],
         "resolve": [],
     }
 
@@ -434,7 +411,6 @@ class MilestoneViewSet(BaseModelViewSet):
     serializer_class = MilestoneSerializer
 
     action_permissions = {
-        "restore": [IsSuperAdmin],
         "complete": [],
     }
 
@@ -482,7 +458,6 @@ class IssueViewSet(BaseModelViewSet):
     serializer_class = IssueSerializer
 
     action_permissions = {
-        "restore": [IsSuperAdmin],
         "resolve": [],
     }
 
@@ -527,10 +502,6 @@ class ProcurementViewSet(BaseModelViewSet):
     ordering_fields = ["tender_date", "award_date", "created_at"]
     ordering = ["-created_at"]
     serializer_class = ProcurementSerializer
-
-    action_permissions = {
-        "restore": [IsSuperAdmin],
-    }
 
     queryset = Procurement.all_objects.all()
 

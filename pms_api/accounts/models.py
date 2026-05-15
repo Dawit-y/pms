@@ -1,6 +1,5 @@
 from django.contrib.auth.models import AbstractBaseUser
 from django.contrib.auth.models import BaseUserManager
-from django.contrib.auth.models import Permission
 from django.contrib.auth.models import PermissionsMixin
 from django.db import models
 
@@ -78,6 +77,26 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
                 "manage_user",
                 ("Can manage user accounts (activate, deactivate, reset password, assign groups)"),
             ),
+            (
+                "manage_superuser",
+                "Can operate on superuser accounts (deactivate/delete superusers)",
+            ),
+            (
+                "view_deleted_records",
+                "Can view soft-deleted records via ?include_deleted=true",
+            ),
+            (
+                "bypass_row_security",
+                "Can view records outside their department/ownership scope",
+            ),
+            (
+                "restore_records",
+                "Can restore soft-deleted records",
+            ),
+            (
+                "hard_delete_records",
+                "Can permanently delete records (bypass soft-delete)",
+            ),
         ]
 
     def __str__(self):
@@ -91,16 +110,22 @@ class User(AbstractBaseUser, PermissionsMixin, BaseModel):
 
     def get_all_permissions_list(self):
         """
-        Get all permissions as sorted list of strings in format: 'app_label.codename'
+        Builds permission list entirely from the prefetch cache.
+        Requires the user to have been fetched with user_permissions and
+        groups__permissions prefetched (select_related content_type).
+        Zero extra queries.
         """
-        if self.is_superuser:
-            perms = Permission.objects.values_list(
-                "content_type__app_label",
-                "codename",
-            )
-            return sorted(f"{app_label}.{codename}" for app_label, codename in perms)
+        perms = set()
 
-        perms = self.get_all_permissions()
+        # Direct user permissions — already in prefetch cache
+        for perm in self.user_permissions.all():
+            perms.add(f"{perm.content_type.app_label}.{perm.codename}")
+
+        # Group permissions — groups and their permissions already prefetched
+        for group in self.groups.all():
+            for perm in group.permissions.all():
+                perms.add(f"{perm.content_type.app_label}.{perm.codename}")
+
         return sorted(perms)
 
 

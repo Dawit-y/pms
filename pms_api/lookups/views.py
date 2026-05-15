@@ -14,8 +14,6 @@ from pms_api.core.cache import cache_value
 from pms_api.core.exceptions import BusinessRuleViolation
 from pms_api.core.exceptions import ResourceNotFound
 from pms_api.core.pagination import success_response
-from pms_api.core.permissions import IsStaffOrReadOnly
-from pms_api.core.permissions import IsSuperAdmin
 from pms_api.core.views import BaseModelViewSet
 from pms_api.lookups.models import Department
 from pms_api.lookups.models import Location
@@ -47,14 +45,6 @@ class LookupTypeViewSet(BaseModelViewSet):
     ordering_fields = ["code", "name_en", "created_at"]
     ordering = ["code"]
     serializer_class = LookupTypeSerializer
-
-    action_permissions = {
-        "create": [IsStaffOrReadOnly],
-        "update": [IsStaffOrReadOnly],
-        "partial_update": [IsStaffOrReadOnly],
-        "destroy": [IsStaffOrReadOnly],
-        "restore": [IsSuperAdmin],
-    }
 
     queryset = LookupType.all_objects.all()
 
@@ -138,14 +128,6 @@ class LookupViewSet(BaseModelViewSet):
     ordering = ["sort_order", "name_en"]
     serializer_class = LookupSerializer
 
-    action_permissions = {
-        "create": [IsStaffOrReadOnly],
-        "update": [IsStaffOrReadOnly],
-        "partial_update": [IsStaffOrReadOnly],
-        "destroy": [IsStaffOrReadOnly],
-        "restore": [IsSuperAdmin],
-    }
-
     queryset = Lookup.all_objects.all()
 
     def get_queryset(self):
@@ -199,14 +181,6 @@ class LocationViewSet(BaseModelViewSet):
     search_fields = ["name_en", "name_am", "name_or", "code"]
     ordering = ["tree_id", "lft"]
     serializer_class = LocationSerializer
-
-    action_permissions = {
-        "create": [IsStaffOrReadOnly],
-        "update": [IsStaffOrReadOnly],
-        "partial_update": [IsStaffOrReadOnly],
-        "destroy": [IsStaffOrReadOnly],
-        "restore": [IsSuperAdmin],
-    }
 
     queryset = Location.all_objects.all()
 
@@ -303,14 +277,6 @@ class DepartmentViewSet(BaseModelViewSet):
     search_fields = ["name_en", "name_am", "name_or", "code"]
     ordering = ["tree_id", "lft"]
     serializer_class = DepartmentSerializer
-
-    action_permissions = {
-        "create": [IsStaffOrReadOnly],
-        "update": [IsStaffOrReadOnly],
-        "partial_update": [IsStaffOrReadOnly],
-        "destroy": [IsStaffOrReadOnly],
-        "restore": [IsSuperAdmin],
-    }
 
     queryset = Department.all_objects.all()
 
