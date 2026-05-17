@@ -9,4 +9,5 @@ urlpatterns = [
     path("", include("pms_api.projects.urls")),
     path("", include("pms_api.lookups.urls")),
     path("", include("pms_api.project_data.urls")),
+    path("", include("pms_api.reports.urls")),
 ]

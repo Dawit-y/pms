@@ -86,6 +86,8 @@ THIRD_PARTY_APPS = [
     "drf_spectacular",
     "mptt",
     "simple_history",
+    "django_celery_beat",
+    "django_celery_results",
 ]
 
 LOCAL_APPS = [
@@ -95,6 +97,7 @@ LOCAL_APPS = [
     "pms_api.budget",
     "pms_api.projects",
     "pms_api.project_data",
+    "pms_api.reports",
 ]
 # https://docs.djangoproject.com/en/dev/ref/settings/#installed-apps
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -435,3 +438,42 @@ SIMPLE_JWT = {
 SIMPLE_HISTORY_REVERT_DISABLED = False
 SIMPLE_HISTORY_HISTORY_ID_USE_UUID = False
 SIMPLE_HISTORY_FILEFIELD_TO_CHARFIELD = True
+
+# Celery
+# -------------------------------------------------------------------------------
+# Broker = Redis (same instance used for caching). Result backend uses
+# django-celery-results so task records survive a Redis flush and are visible
+# in the Django admin alongside everything else.
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default=REDIS_URL)
+CELERY_RESULT_BACKEND = "django-db"
+CELERY_CACHE_BACKEND = "default"
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True
+CELERY_TASK_SERIALIZER = "json"
+CELERY_RESULT_SERIALIZER = "json"
+CELERY_ACCEPT_CONTENT = ["json"]
+CELERY_TASK_TIME_LIMIT = 60 * 30
+CELERY_TASK_SOFT_TIME_LIMIT = 60 * 25
+CELERY_TASK_ACKS_LATE = True
+# Long-running export tasks deserve fairness over throughput. With prefetch=1,
+# a worker pulls one task at a time so a slow export doesn't block faster ones
+# already waiting in the same queue.
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
+CELERY_TASK_DEFAULT_QUEUE = "default"
+CELERY_TASK_ROUTES = {
+    "pms_api.reports.tasks.generate_report": {"queue": "reports"},
+    "pms_api.reports.tasks.cleanup_expired_reports": {"queue": "maintenance"},
+}
+CELERY_RESULT_EXTENDED = True
+
+# Reports
+# -------------------------------------------------------------------------------
+REPORT_FILE_RETENTION_DAYS = env.int("REPORT_FILE_RETENTION_DAYS", default=7)
+REPORT_DOWNLOAD_TOKEN_MAX_AGE = env.int("REPORT_DOWNLOAD_TOKEN_MAX_AGE", default=24 * 3600)
+REPORT_MAX_ROWS_XLSX = env.int("REPORT_MAX_ROWS_XLSX", default=200_000)
+REPORT_MAX_ROWS_PDF = env.int("REPORT_MAX_ROWS_PDF", default=5000)
+# Per-user ceiling on concurrent queued|running jobs — guards against abuse
+# that could exhaust the media volume before the daily cleanup runs.
+REPORT_MAX_CONCURRENT_PER_USER = env.int("REPORT_MAX_CONCURRENT_PER_USER", default=3)

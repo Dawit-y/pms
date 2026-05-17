@@ -1,6 +1,7 @@
 volumes:
   pms_api_local_postgres_data: {}
   pms_api_local_postgres_data_backups: {}
+  pms_api_local_redis_data: {}
 
 
 services:
@@ -12,6 +13,7 @@ services:
     container_name: pms_api_local_django
     depends_on:
       - postgres
+      - redis
     volumes:
       - /app/.venv
       - .:/app:z
@@ -33,3 +35,41 @@ services:
       - pms_api_local_postgres_data_backups:/backups
     env_file:
       - ./.envs/.local/.postgres
+
+  redis:
+    image: docker.io/redis:7.2
+    container_name: pms_api_local_redis
+    volumes:
+      - pms_api_local_redis_data:/data
+
+  celeryworker:
+    <<: &django-anchor
+      build:
+        context: .
+        dockerfile: ./compose/local/django/Dockerfile
+      image: pms_api_local_django
+      depends_on:
+        - postgres
+        - redis
+      volumes:
+        - /app/.venv
+        - .:/app:z
+      env_file:
+        - ./.envs/.local/.django
+        - ./.envs/.local/.postgres
+    container_name: pms_api_local_celeryworker
+    ports: []
+    command: /start-celeryworker
+
+  celerybeat:
+    <<: *django-anchor
+    container_name: pms_api_local_celerybeat
+    ports: []
+    command: /start-celerybeat
+
+  flower:
+    <<: *django-anchor
+    container_name: pms_api_local_flower
+    ports:
+      - '5555:5555'
+    command: /start-flower

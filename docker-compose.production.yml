@@ -3,11 +3,12 @@ volumes:
   production_postgres_data_backups: {}
   production_traefik: {}
   production_django_media: {}
+  production_redis_data: {}
 
 
 
 services:
-  django:
+  django: &django
     build:
       context: .
       dockerfile: ./compose/production/django/Dockerfile
@@ -49,7 +50,25 @@ services:
 
   redis:
     image: docker.io/redis:7.2
+    volumes:
+      - production_redis_data:/data
 
+  celeryworker:
+    <<: *django
+    image: pms_api_production_celeryworker
+    command: /start-celeryworker
+
+  celerybeat:
+    <<: *django
+    image: pms_api_production_celerybeat
+    command: /start-celerybeat
+
+  flower:
+    <<: *django
+    image: pms_api_production_flower
+    ports:
+      - '5555:5555'
+    command: /start-flower
 
   nginx:
     build:
