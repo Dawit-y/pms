@@ -10,7 +10,6 @@ Every feature is implemented here ONCE so app-level ViewSets get it for free:
 │  Hard delete            │  hard_destroy action (superuser only) │
 │  Restore deleted        │  restore action (staff only)          │
 │  Audit trail inject     │  get_serializer_context() adds user   │
-│  History / changelog    │  history action (GET /{uuid}/history) │
 │  Signals                │  post_save emitted by model layer     │
 │  Response envelope      │  success_response() wraps all data    │
 │  Pagination             │  StandardPagination on all lists      │

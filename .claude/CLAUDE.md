@@ -50,8 +50,6 @@ Almost every domain model and ViewSet inherits from a centralized base. Understa
 - `RowLevelSecurityMixin` — optional `owner` FK, used by `IsOwnerOrAdmin` and `SecureQuerySetMixin`.
 - `SignalMixin` — emits the custom `model_changed` / `model_deleted` signals from `core/signals.py` on save/delete. Subclasses **must call `Model.connect_signals()`** at module level (see `accounts/models.py:101`).
 
-**`HistoryMixin`** (django-simple-history) is **opt-in**, not part of `BaseModel`. Add it to a model that needs change tracking: `class Project(HistoryMixin, BaseModel)`. Note: `simple_history.middleware.HistoryRequestMiddleware` is currently commented out in `base.py` — history records won't capture the request user until it's re-enabled.
-
 The `User` model is a special case: it defines its own `UserManager` to reconcile MRO between Django's `BaseUserManager` and `SoftDeleteManager`.
 
 **`pms_api/core/views.py` → `BaseModelViewSet`** is what every resource ViewSet should inherit from. It bundles:
@@ -105,10 +103,10 @@ So the standard pattern is: keep `permission_classes = [StrictDjangoModelPermiss
 
 ### Apps
 
-- `core` — base classes, mixins, permissions, throttling, pagination, exception handler, custom `AccessLogMiddleware` (logs authenticated POST/PUT/PATCH/DELETE), notifications ViewSet, management commands (`check_security`, `archive_history`).
+- `core` — base classes, mixins, permissions, throttling, pagination, exception handler, custom `AccessLogMiddleware` (logs authenticated POST/PUT/PATCH/DELETE), notifications ViewSet, management commands (`check_security`).
 - `accounts` — custom `User` (email-as-username, soft-delete-aware manager), JWT views (`CustomTokenObtainPairView`, refresh, logout), `MeView`, `ChangePasswordView`, plus `Group` / `Permission` / `ContentType` ViewSets for RBAC admin. URL prefixes are flat (`/login/`, `/me/`, `/users/`, …).
 - `lookups` — `LookupType` / `Lookup` (admin-defined dropdown values, tri-lingual), `Location` and `Department` (both **MPTT** trees — use `get_descendants(include_self=True)` when querying subtrees).
-- `projects` — `Project` (uses `HistoryMixin`), `ProjectStatus`.
+- `projects` — `Project`, `ProjectStatus`.
 - `budget` — `BudgetRequest` and approval workflow.
 - `project_data` — child entities of a project: contractors, payments, milestones, issues, monitoring visits, evaluations, risks, procurements, employees, documents.
 

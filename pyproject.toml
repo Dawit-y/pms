@@ -32,7 +32,6 @@ dependencies = [
   "django-model-utils==5.0.0",
   "django-mptt>=0.18.0",
   "django-redis==6.0.0",
-  "django-simple-history>=3.11.0",
   "djangorestframework==3.17.1",
   "djangorestframework-simplejwt>=5.5.1",
   "drf-spectacular==0.29.0",

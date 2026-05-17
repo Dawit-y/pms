@@ -25,7 +25,7 @@ PMS API is a robust, scalable project management system designed for enterprise 
 - **Rate Limiting**: Multi-tier throttling (anonymous, authenticated, burst, sustained)
 - **Security Headers**: HSTS, CSP, Permissions-Policy, X-Frame-Options
 - **JWT Authentication**: Token-based auth with refresh token rotation
-- **Audit Logging**: Complete history tracking with django-simple-history
+- **Audit Logging**: created_by / updated_by audit trail on every record
 - **CORS Support**: Configurable cross-origin resource sharing
 - **API Documentation**: Interactive Swagger UI and ReDoc
 

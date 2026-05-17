@@ -1,23 +1,14 @@
 from django.contrib import admin
 
-from pms_api.core.admin import BaseModelAdmin
+from pms_api.core.admin import BaseSoftDeleteAdmin
 
 from .models import Project
 from .models import ProjectStatus
 
 
 @admin.register(Project)
-class ProjectAdmin(BaseModelAdmin):
-    """
-    Admin interface for Project with history tracking.
-
-    Features:
-    - View full change history (click "History" button)
-    - Compare versions side-by-side
-    - Revert to previous versions
-    - Filter by history date and user
-    - See soft-deleted projects
-    """
+class ProjectAdmin(BaseSoftDeleteAdmin):
+    """Admin interface for Project."""
 
     list_display = [
         "code",
@@ -35,9 +26,6 @@ class ProjectAdmin(BaseModelAdmin):
         "created_at",
     ]
     search_fields = ["code", "title", "description"]
-
-    # History configuration - fields to show in history list
-    history_list_display = ["code", "title", "is_active"]
 
     fieldsets = (
         (
@@ -82,10 +70,8 @@ class ProjectAdmin(BaseModelAdmin):
 
 
 @admin.register(ProjectStatus)
-class ProjectStatusAdmin(BaseModelAdmin):
-    """
-    Admin interface for ProjectStatus with history tracking.
-    """
+class ProjectStatusAdmin(BaseSoftDeleteAdmin):
+    """Admin interface for ProjectStatus."""
 
     list_display = [
         "project",
@@ -98,9 +84,6 @@ class ProjectStatusAdmin(BaseModelAdmin):
     ]
     list_filter = ["status", "visit_date", "created_at"]
     search_fields = ["project__code", "project__title", "remarks"]
-
-    # History configuration
-    history_list_display = ["status", "physical_progress_pct", "financial_progress_pct"]
 
     fieldsets = (
         (
