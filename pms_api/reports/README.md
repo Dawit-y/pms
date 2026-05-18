@@ -1011,7 +1011,7 @@ docker compose -f docker-compose.local.yml up
 
 ### Production
 
-The production compose now contains `redis`, `celeryworker`, `celerybeat`, and `flower` services in addition to django + postgres + traefik + nginx.
+The production compose now contains `redis`, `celeryworker`, `celerybeat`, and `flower` services in addition to django + postgres. A host-level nginx terminates TLS and proxies to gunicorn (see `DEPLOYMENT.md`).
 
 ---
 
