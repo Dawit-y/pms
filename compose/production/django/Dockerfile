@@ -88,6 +88,7 @@ USER django
 
 RUN DATABASE_URL="" \
   DJANGO_SETTINGS_MODULE="config.settings.test" \
+  DJANGO_SECRET_KEY="build-time-placeholder-not-used-at-runtime" \
   python manage.py compilemessages
 
 ENTRYPOINT ["/entrypoint"]
