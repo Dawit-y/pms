@@ -37,7 +37,7 @@ services:
       - ./.envs/.local/.postgres
 
   redis:
-    image: docker.io/redis:7.2
+    image: docker.io/redis:8.6
     container_name: pms_api_local_redis
     volumes:
       - pms_api_local_redis_data:/data
