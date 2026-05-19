@@ -365,6 +365,54 @@ uv run python manage.py migrate
 uv run python manage.py makemigrations
 ```
 
+### Fake Data Seeders
+
+Seed the database with realistic fake data for local development and demos.
+All four commands accept `--count N` (size of the dataset) and `--flush`
+(hard-delete the relevant tables before seeding). They are idempotent —
+re-running without `--flush` only inserts what's missing.
+
+**Run them in this order — each one depends on the previous:**
+
+```bash
+# 1. Lookups, real Ethiopian location tree, and a department tree.
+#    --count controls how many synthetic sub-departments are created
+#    under each directorate. Locations are NOT fake — they are real
+#    Ethiopian regions, zones, and woredas (Addis Ababa, Oromia, Amhara,
+#    Tigray, SNNPR, Sidama, Afar, Somali, Benishangul-Gumuz, Gambela,
+#    Harari, Dire Dawa) with tri-lingual names where available.
+uv run python manage.py seed_lookups --count 20
+
+# 2. Projects (+ a short ProjectStatus history per project).
+#    Requires: seed_lookups + at least one User (createsuperuser).
+uv run python manage.py seed_projects --count 50
+
+# 3. Project child data: Contractors, ContractorAssignments, Payments,
+#    Milestones, Risks, Issues, Procurements, ProjectEmployees,
+#    MonitoringVisits, Evaluations. ProjectDocument is skipped (it
+#    requires real uploaded files). `--count` controls how many
+#    Contractors to create; per-project child rows are generated for
+#    every existing project. Requires: seed_lookups + seed_projects.
+uv run python manage.py seed_project_data --count 40
+
+# 4. BudgetRequest rows (one per Project, since the relation is OneToOne)
+#    plus a short BudgetForwardingStep history for forwarded/approved
+#    requests. Requires: seed_lookups + seed_projects.
+uv run python manage.py seed_budget --count 50
+```
+
+**Reset and reseed from scratch:**
+
+```bash
+uv run python manage.py seed_lookups       --count 20 --flush
+uv run python manage.py seed_projects      --count 50 --flush
+uv run python manage.py seed_project_data  --count 40 --flush
+uv run python manage.py seed_budget        --count 50 --flush
+```
+
+`--flush` hard-deletes (not soft-deletes) the rows in the tables that
+command owns, so the next insert starts from a clean slate.
+
 ### Database Backups (Docker)
 
 ```bash
