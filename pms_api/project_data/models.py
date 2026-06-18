@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 
 from pms_api.core.models.base import BaseModel
 from pms_api.projects.models import ProjectStatus
@@ -231,6 +232,10 @@ class Milestone(ProjectDataMixin, BaseModel):
     def __str__(self):
         return self.title
 
+    @property
+    def is_overdue(self):
+        return not self.is_completed and self.planned_date < timezone.localdate()
+
 
 # ── Issue ─────────────────────────────────────────────────────────────────────
 class Issue(ProjectDataMixin, BaseModel):
@@ -255,6 +260,14 @@ class Issue(ProjectDataMixin, BaseModel):
 
     def __str__(self):
         return self.title
+
+    @property
+    def is_overdue(self):
+        return (
+            self.due_date is not None
+            and not self.is_resolved
+            and self.due_date < timezone.localdate()
+        )
 
 
 # ── Procurement ──────────────────────────────────────────────────────────────
