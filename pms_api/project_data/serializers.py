@@ -334,6 +334,7 @@ class MilestoneSerializer(BaseModelSerializer):
     project_title = serializers.CharField(source="project.title", read_only=True)
     status = serializers.SerializerMethodField()
     days_overdue = serializers.SerializerMethodField()
+    is_overdue = serializers.ReadOnlyField()
 
     class Meta:
         model = Milestone
@@ -351,6 +352,7 @@ class MilestoneSerializer(BaseModelSerializer):
             "completion_pct",
             "status",
             "days_overdue",
+            "is_overdue",
             "created_at",
             "updated_at",
         ]
@@ -360,7 +362,8 @@ class MilestoneSerializer(BaseModelSerializer):
         if obj.is_completed:
             return "completed"
 
-        if obj.planned_date < timezone.now().date():
+        # if obj.planned_date < timezone.now().date():
+        if obj.is_overdue:
             return "overdue"
         return "on_track"
 
@@ -384,6 +387,7 @@ class IssueSerializer(BaseModelSerializer):
         default=None,
     )
     status = serializers.SerializerMethodField()
+    is_overdue = serializers.ReadOnlyField()
 
     class Meta:
         model = Issue
@@ -401,6 +405,7 @@ class IssueSerializer(BaseModelSerializer):
             "due_date",
             "is_resolved",
             "status",
+            "is_overdue",
             "created_at",
             "updated_at",
         ]
@@ -409,9 +414,10 @@ class IssueSerializer(BaseModelSerializer):
     def get_status(self, obj) -> str:
         if obj.is_resolved:
             return "resolved"
-        if obj.due_date:
-            if obj.due_date < timezone.now().date():
-                return "overdue"
+        # if obj.due_date:
+        #     if obj.due_date < timezone.now().date():
+        if obj.is_overdue:
+            return "overdue"
         return "open"
 
 
