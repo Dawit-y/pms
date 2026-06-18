@@ -442,6 +442,10 @@ class NotificationViewSet(
     permission_classes = [IsAuthenticated]
     lookup_field = "uuid"
 
+    filterset_fields =["is_read"]
+    search_fields =["verb"]
+    ordering_fields= ["created_at"]
+
     def get_queryset(self):
         return (
             Notification.objects.filter(recipient=self.request.user)
