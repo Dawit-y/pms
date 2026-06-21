@@ -459,6 +459,9 @@ class IssueViewSet(BaseModelViewSet):
 
     action_permissions = {
         "resolve": [],
+        "summary": [
+            permission_required("project_data.view_issue"),
+        ],
     }
 
     queryset = Issue.all_objects.all()
@@ -480,6 +483,40 @@ class IssueViewSet(BaseModelViewSet):
             success_response(
                 IssueSerializer(issue).data,
                 message="Issue marked as resolved.",
+            ),
+        )
+
+    @extend_schema(summary="Issue summary")
+    @action(detail=False, methods=["get"], url_path="summary")
+    def summary(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+
+        project_param = request.query_params.get("project")
+
+        if project_param:
+            queryset = queryset.filter(project__uuid=project_param)
+
+        total = queryset.count()
+
+        resolved = queryset.filter(
+            is_resolved=True,
+        ).count()
+
+        open_count = queryset.filter(
+            is_resolved=False,
+        ).count()
+
+        severity_counts = queryset.order_by().values("severity").annotate(count=Count("id"))
+        by_severity = {row["severity"]: row["count"] for row in severity_counts}
+
+        return Response(
+            success_response(
+                {
+                    "total": total,
+                    "by_severity": by_severity,
+                    "open": open_count,
+                    "resolved": resolved,
+                },
             ),
         )
 
