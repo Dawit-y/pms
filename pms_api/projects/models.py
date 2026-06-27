@@ -3,6 +3,20 @@ from django.db import models
 from pms_api.core.models.base import BaseModel
 
 
+class ProjectTag(BaseModel):
+    name = models.CharField(
+        max_length=100,
+        unique=True,
+    )
+
+    color = models.CharField(
+        max_length=7,
+    )
+
+    def __str__(self):
+        return self.name
+
+
 class Project(BaseModel):
     """
     A government project: road, school, hospital, dam, etc.
@@ -27,6 +41,12 @@ class Project(BaseModel):
     implementing_department = models.ForeignKey(
         "lookups.Department",
         on_delete=models.PROTECT,
+        related_name="projects",
+    )
+
+    tags = models.ManyToManyField(
+        "ProjectTag",
+        blank=True,
         related_name="projects",
     )
 

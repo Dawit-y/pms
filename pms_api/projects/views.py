@@ -20,12 +20,14 @@ from pms_api.core.permissions import permission_required
 from pms_api.core.views import BaseModelViewSet
 from pms_api.projects.models import Project
 from pms_api.projects.models import ProjectStatus
+from pms_api.projects.models import ProjectTag
 
 from .serializers import ProjectCreateSerializer
 from .serializers import ProjectDetailSerializer
 from .serializers import ProjectListSerializer
 from .serializers import ProjectStatusCreateSerializer
 from .serializers import ProjectStatusSerializer
+from .serializers import ProjectTagSerializer
 
 
 class ProjectViewSet(BaseModelViewSet):
@@ -87,6 +89,7 @@ class ProjectViewSet(BaseModelViewSet):
                 "budget_request",
             )
             .prefetch_related(
+                "tags",
                 Prefetch(
                     "status_history",
                     queryset=ProjectStatus.objects.select_related("changed_by").order_by(
@@ -281,3 +284,18 @@ class ProjectStatusViewSet(BaseModelViewSet):
         return (
             super().get_queryset().select_related("project", "changed_by").order_by("-created_at")
         )
+
+
+class ProjectTagViewSet(BaseModelViewSet):
+    queryset = ProjectTag.all_objects.all()
+    serializer_class = ProjectTagSerializer
+    lookup_field = "uuid"
+
+    search_fields = ["name"]
+    ordering_fields = ["name", "created_at"]
+    ordering = ["name"]
+
+    filter_backends = [
+        filters.SearchFilter,
+        filters.OrderingFilter,
+    ]
