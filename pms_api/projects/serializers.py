@@ -3,6 +3,25 @@ from rest_framework import serializers
 from pms_api.core.serializers import BaseModelSerializer
 from pms_api.projects.models import Project
 from pms_api.projects.models import ProjectStatus
+from pms_api.projects.models import ProjectTag
+
+
+class ProjectTagSerializer(BaseModelSerializer):
+    class Meta:
+        model = ProjectTag
+        fields = [
+            "id",
+            "uuid",
+            "name",
+            "color",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "uuid",
+            "created_at",
+            "updated_at",
+        ]
 
 
 class ProjectStatusSerializer(BaseModelSerializer):
@@ -108,6 +127,11 @@ class ProjectDetailSerializer(BaseModelSerializer):
         read_only=True,
         default=None,
     )
+    # Expose tags in ProjectDetailSerializer
+    tags = ProjectTagSerializer(
+        many=True,
+        read_only=True,
+    )
     budget_summary = serializers.SerializerMethodField()
     recent_status_history = serializers.SerializerMethodField()
     completion_pct = serializers.SerializerMethodField()
@@ -133,6 +157,7 @@ class ProjectDetailSerializer(BaseModelSerializer):
             "total_budget",
             "current_status",
             "current_status_detail",
+            "tags",
             "is_active",
             "budget_summary",
             "recent_status_history",
@@ -183,6 +208,12 @@ class ProjectDetailSerializer(BaseModelSerializer):
 
 
 class ProjectCreateSerializer(BaseModelSerializer):
+    tags = serializers.PrimaryKeyRelatedField(
+        queryset=ProjectTag.objects.all(),
+        many=True,
+        required=False,
+    )
+
     class Meta:
         model = Project
         fields = [
@@ -192,6 +223,7 @@ class ProjectCreateSerializer(BaseModelSerializer):
             "description",
             "project_type",
             "location",
+            "tags",
             "implementing_department",
             "start_date",
             "planned_end_date",
@@ -206,7 +238,11 @@ class ProjectCreateSerializer(BaseModelSerializer):
         return value
 
     def create(self, validated_data):
+        tags = validated_data.pop("tags", [])
         instance = super().create(validated_data)
+
+        if tags:
+            instance.tags.set(tags)
         # Auto-create first status entry
         user = self.context["request"].user
         ps = ProjectStatus.objects.create(
