@@ -1,11 +1,13 @@
 from django.db import transaction
 from django.db.models import Count
+from django.db.models import Prefetch
 from django.db.models import Q
 from django.db.models import Sum
 from django.utils import timezone
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_spectacular.utils import extend_schema
 from rest_framework import filters
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
@@ -17,6 +19,7 @@ from pms_api.project_data.models import Contractor
 from pms_api.project_data.models import ContractorAssignment
 from pms_api.project_data.models import Evaluation
 from pms_api.project_data.models import Issue
+from pms_api.project_data.models import IssueComment
 from pms_api.project_data.models import Milestone
 from pms_api.project_data.models import MonitoringVisit
 from pms_api.project_data.models import Payment
@@ -27,6 +30,8 @@ from pms_api.project_data.models import Risk
 from pms_api.project_data.serializers import ContractorAssignmentSerializer
 from pms_api.project_data.serializers import ContractorSerializer
 from pms_api.project_data.serializers import EvaluationSerializer
+from pms_api.project_data.serializers import IssueCommentCreateSerializer
+from pms_api.project_data.serializers import IssueCommentSerializer
 from pms_api.project_data.serializers import IssueSerializer
 from pms_api.project_data.serializers import MilestoneSerializer
 from pms_api.project_data.serializers import MonitoringVisitSerializer
@@ -446,6 +451,7 @@ class IssueViewSet(BaseModelViewSet):
     Manages project issues with severity levels and assignments.
     """
 
+    lookup_field = "uuid"
     filter_backends = [
         DjangoFilterBackend,
         filters.SearchFilter,
@@ -468,7 +474,16 @@ class IssueViewSet(BaseModelViewSet):
 
     def get_queryset(self):
         return (
-            super().get_queryset().select_related("project", "assigned_to").order_by("-created_at")
+            super()
+            .get_queryset()
+            .select_related("project", "assigned_to")
+            .prefetch_related(
+                Prefetch(
+                    "comments",
+                    queryset=IssueComment.objects.select_related("created_by"),
+                ),
+            )
+            .order_by("-created_at")
         )
 
     @extend_schema(summary="Mark an issue as resolved")
@@ -518,6 +533,30 @@ class IssueViewSet(BaseModelViewSet):
                     "resolved": resolved,
                 },
             ),
+        )
+
+    # ── Issuecomment ──────────────────────────────
+
+    @extend_schema(
+        summary="Add a comment to an Issue",
+        request=IssueCommentCreateSerializer,
+    )
+    @action(detail=True, methods=["post"], url_path="comments")
+    def comments(self, request, *args, **kwargs):
+        issue = self.get_object()
+        ser = IssueCommentCreateSerializer(
+            data=request.data,
+            context={"request": request},
+        )
+        ser.is_valid(raise_exception=True)
+        comment = ser.save(issue=issue)
+
+        return Response(
+            success_response(
+                IssueCommentSerializer(comment).data,
+                message="Comment added successfully.",
+            ),
+            status=status.HTTP_201_CREATED,
         )
 
 

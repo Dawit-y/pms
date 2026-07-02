@@ -6,6 +6,7 @@ from pms_api.project_data.models import Contractor
 from pms_api.project_data.models import ContractorAssignment
 from pms_api.project_data.models import Evaluation
 from pms_api.project_data.models import Issue
+from pms_api.project_data.models import IssueComment
 from pms_api.project_data.models import Milestone
 from pms_api.project_data.models import MonitoringVisit
 from pms_api.project_data.models import Payment
@@ -375,6 +376,33 @@ class MilestoneSerializer(BaseModelSerializer):
         return delta if delta > 0 else None
 
 
+# ─── IssueComment Serializers ──────────────────────────────────────────────────
+
+
+class IssueCommentSerializer(BaseModelSerializer):
+    class Meta:
+        model = IssueComment
+        fields = ["uuid", "body", "created_at", "created_by_email"]
+
+
+# ─── IssueCommentCreate Serializers ──────────────────────────────────────────────────
+
+
+class IssueCommentCreateSerializer(BaseModelSerializer):
+    class Meta:
+        model = IssueComment
+        fields = [
+            "body",
+        ]
+
+    def validate_body(self, value):
+        value = value.strip()
+        if not value:
+            message = "Comment body can not be empty."
+            raise serializers.ValidationError(message)
+        return value
+
+
 # ─── Issue Serializers ────────────────────────────────────────────────────────
 
 
@@ -388,6 +416,10 @@ class IssueSerializer(BaseModelSerializer):
     )
     status = serializers.SerializerMethodField()
     is_overdue = serializers.ReadOnlyField()
+    comments = IssueCommentSerializer(
+        many=True,
+        read_only=True,
+    )
 
     class Meta:
         model = Issue
@@ -406,6 +438,7 @@ class IssueSerializer(BaseModelSerializer):
             "is_resolved",
             "status",
             "is_overdue",
+            "comments",
             "created_at",
             "updated_at",
         ]
