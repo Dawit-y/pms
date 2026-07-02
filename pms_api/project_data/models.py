@@ -270,6 +270,19 @@ class Issue(ProjectDataMixin, BaseModel):
         )
 
 
+# ── IssueComment ──────────────────────────────────────────────────────────────
+class IssueComment(BaseModel):
+    issue = models.ForeignKey(
+        "Issue",
+        on_delete=models.CASCADE,
+        related_name="comments",
+    )
+    body = models.TextField()
+
+    def __str__(self):
+        return self.body[:50]
+
+
 # ── Procurement ──────────────────────────────────────────────────────────────
 class Procurement(ProjectDataMixin, BaseModel):
     METHOD_CHOICES = [
