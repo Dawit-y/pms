@@ -282,6 +282,7 @@ class RiskSerializer(BaseModelSerializer):
     project_title = serializers.CharField(source="project.title", read_only=True)
     risk_owner_email = serializers.CharField(source="risk_owner.email", read_only=True)
     risk_level = serializers.SerializerMethodField()
+    score = serializers.ReadOnlyField()
 
     class Meta:
         model = Risk
@@ -295,6 +296,7 @@ class RiskSerializer(BaseModelSerializer):
             "description",
             "probability",
             "impact",
+            "score",
             "risk_level",
             "mitigation_plan",
             "risk_owner",
@@ -311,12 +313,13 @@ class RiskSerializer(BaseModelSerializer):
         high_threshold = 6
         medium_threshold = 3
 
-        prob_score = {"low": 1, "medium": 2, "high": 3}.get(obj.probability, 0)
-        impact_score = {"low": 1, "medium": 2, "high": 3, "critical": 4}.get(
-            obj.impact,
-            0,
-        )
-        total = prob_score * impact_score
+        # prob_score = {"low": 1, "medium": 2, "high": 3}.get(obj.probability, 0)
+        # impact_score = {"low": 1, "medium": 2, "high": 3, "critical": 4}.get(
+        #     obj.impact,
+        #     0,
+        # )
+        # total = prob_score * impact_score
+        total = obj.score
 
         if total >= critical_threshold:
             return "critical"

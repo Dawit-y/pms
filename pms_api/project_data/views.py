@@ -15,6 +15,7 @@ from pms_api.core.exceptions import BusinessRuleViolation
 from pms_api.core.pagination import success_response
 from pms_api.core.permissions import permission_required
 from pms_api.core.views import BaseModelViewSet
+from pms_api.project_data.filters import RiskFilter
 from pms_api.project_data.models import Contractor
 from pms_api.project_data.models import ContractorAssignment
 from pms_api.project_data.models import Evaluation
@@ -363,7 +364,8 @@ class RiskViewSet(BaseModelViewSet):
         filters.SearchFilter,
         filters.OrderingFilter,
     ]
-    filterset_fields = ["project", "probability", "impact", "is_resolved", "risk_owner"]
+    # filterset_fields = ["project", "probability", "impact", "is_resolved", "risk_owner"]
+    filterset_class = RiskFilter
     search_fields = ["title", "description", "mitigation_plan"]
     ordering_fields = ["created_at"]
     ordering = ["-created_at"]
@@ -393,6 +395,47 @@ class RiskViewSet(BaseModelViewSet):
                 RiskSerializer(risk).data,
                 message="Risk marked as resolved.",
             ),
+        )
+
+    @extend_schema(summary="Risk heatmap")
+    @action(detail=False, methods=["get"], url_path="heatmap")
+    def heatmap(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+
+        project_param = request.query_params.get("project")
+
+        if project_param:
+            queryset = queryset.filter(project__uuid=project_param)
+
+        heatmap_data = (
+            queryset.order_by().values("probability", "impact").annotate(count=Count("id"))
+        )
+        heatmap = {
+            "low": {
+                "low": 0,
+                "medium": 0,
+                "high": 0,
+                "critical": 0,
+            },
+            "medium": {
+                "low": 0,
+                "medium": 0,
+                "high": 0,
+                "critical": 0,
+            },
+            "high": {
+                "low": 0,
+                "medium": 0,
+                "high": 0,
+                "critical": 0,
+            },
+        }
+
+        for row in heatmap_data:
+            heatmap[row["probability"]][row["impact"]] = row["count"]
+
+        return Response(
+            success_response(heatmap),
         )
 
 
