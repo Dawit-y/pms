@@ -364,7 +364,6 @@ class RiskViewSet(BaseModelViewSet):
         filters.SearchFilter,
         filters.OrderingFilter,
     ]
-    # filterset_fields = ["project", "probability", "impact", "is_resolved", "risk_owner"]
     filterset_class = RiskFilter
     search_fields = ["title", "description", "mitigation_plan"]
     ordering_fields = ["created_at"]

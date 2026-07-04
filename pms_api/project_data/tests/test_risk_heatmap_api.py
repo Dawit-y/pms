@@ -3,13 +3,11 @@ Tests for Risk Heatmap API.
 """
 
 import pytest
-from django.db.models import Count
 from django.urls import reverse
 from rest_framework import status
 
 from pms_api.project_data.tests.factories import RiskFactory
 from pms_api.projects.tests.factories import ProjectFactory
-from pms_api.project_data.models import Risk
 
 
 @pytest.mark.django_db
@@ -119,7 +117,6 @@ class TestRiskAPI:
             impact="high",
             risk_owner=superuser,
         )
-        # assert Risk.objects.count() == 3
 
         url = reverse("api:project_data:risk-heatmap")
         response = admin_client.get(url)

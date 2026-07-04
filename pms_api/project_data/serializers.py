@@ -313,12 +313,6 @@ class RiskSerializer(BaseModelSerializer):
         high_threshold = 6
         medium_threshold = 3
 
-        # prob_score = {"low": 1, "medium": 2, "high": 3}.get(obj.probability, 0)
-        # impact_score = {"low": 1, "medium": 2, "high": 3, "critical": 4}.get(
-        #     obj.impact,
-        #     0,
-        # )
-        # total = prob_score * impact_score
         total = obj.score
 
         if total >= critical_threshold:
