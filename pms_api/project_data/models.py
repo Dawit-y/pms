@@ -207,6 +207,12 @@ class Risk(ProjectDataMixin, BaseModel):
         ("high", "High"),
         ("critical", "Critical"),
     ]
+    SCORE_WEIGHTS = {
+        "low": 1,
+        "medium": 2,
+        "high": 3,
+        "critical": 4,
+    }
 
     title = models.CharField(max_length=500)
     description = models.TextField()
@@ -218,6 +224,10 @@ class Risk(ProjectDataMixin, BaseModel):
 
     def __str__(self):
         return self.title
+
+    @property
+    def score(self):
+        return self.SCORE_WEIGHTS[self.probability] * self.SCORE_WEIGHTS[self.impact]
 
 
 # ── Milestone ─────────────────────────────────────────────────────────────────
