@@ -538,18 +538,27 @@ class IssueViewSet(BaseModelViewSet):
     # ── Issuecomment ──────────────────────────────
 
     @extend_schema(
-        summary="Add a comment to an Issue",
+        summary="List or create issue comments",
         request=IssueCommentCreateSerializer,
     )
-    @action(detail=True, methods=["post"], url_path="comments")
+    @action(detail=True, methods=["get", "post"], url_path="comments")
+    @transaction.atomic
     def comments(self, request, *args, **kwargs):
         issue = self.get_object()
-        ser = IssueCommentCreateSerializer(
+        if request.method == "GET":
+            serializer = IssueCommentSerializer(
+                issue.comments.order_by("created_at"),
+                many=True,
+            )
+            return Response(
+                success_response(serializer.data),
+            )
+        serializer = IssueCommentCreateSerializer(
             data=request.data,
             context={"request": request},
         )
-        ser.is_valid(raise_exception=True)
-        comment = ser.save(issue=issue)
+        serializer.is_valid(raise_exception=True)
+        comment = serializer.save(issue=issue)
 
         return Response(
             success_response(

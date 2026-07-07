@@ -150,3 +150,54 @@ class TestIssueCommentsAPI:
 
         assert response.status_code == status.HTTP_401_UNAUTHORIZED
         assert IssueComment.objects.count() == 0
+
+    def test_list_issue_comments(
+        self,
+        admin_client,
+        project_type,
+        location,
+        department,
+        superuser,
+    ):
+        project = ProjectFactory(
+            project_type=project_type,
+            location=location,
+            implementing_department=department,
+        )
+
+        issue = IssueFactory(
+            project=project,
+            created_by=superuser,
+            updated_by=superuser,
+        )
+
+        IssueCommentFactory(
+            issue=issue,
+            body="First comment",
+            created_by=superuser,
+            updated_by=superuser,
+        )
+
+        IssueCommentFactory(
+            issue=issue,
+            body="Second comment",
+            created_by=superuser,
+            updated_by=superuser,
+        )
+
+        url = reverse(
+            "api:project_data:issue-comments",
+            kwargs={"uuid": issue.uuid},
+        )
+
+        response = admin_client.get(url)
+
+        assert response.status_code == status.HTTP_200_OK
+        assert len(response.data["data"]) == 2
+
+        bodies = {comment["body"] for comment in response.data["data"]}
+
+        assert bodies == {
+            "First comment",
+            "Second comment",
+        }
