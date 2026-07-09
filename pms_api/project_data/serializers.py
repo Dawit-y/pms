@@ -110,10 +110,7 @@ class ProjectDocumentSerializer(BaseModelSerializer):
     def validate_file(self, value):
         if value.size > settings.MAX_DOCUMENT_UPLOAD_SIZE:
             max_mb = settings.MAX_DOCUMENT_UPLOAD_SIZE / (1024 * 1024)
-            message = (
-                f"File size exceeds the limit. "
-                f"Maximum allowed size is {max_mb:.1f} MB."
-            )
+            message = f"File size exceeds the limit. Maximum allowed size is {max_mb:.1f} MB."
             raise serializers.ValidationError(message)
         return value
 

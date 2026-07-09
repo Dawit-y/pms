@@ -77,9 +77,7 @@ class TestProjectDocumentAPI:
             format="multipart",
         )
         assert response.status_code == 400
-        assert (
-        "File extension" in response.data["error"]["detail"]["file"][0]
-        )
+        assert "File extension" in response.data["error"]["detail"]["file"][0]
 
     def test_upload_file_size_exceeded(
         self,
