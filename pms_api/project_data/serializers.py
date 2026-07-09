@@ -1,3 +1,6 @@
+from pathlib import Path
+
+from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
 
@@ -61,6 +64,7 @@ class ProjectDocumentSerializer(BaseModelSerializer):
     )
     project_code = serializers.CharField(source="project.code", read_only=True)
     file_url = serializers.SerializerMethodField()
+    file_size = serializers.SerializerMethodField()
 
     class Meta:
         model = ProjectDocument
@@ -74,6 +78,7 @@ class ProjectDocumentSerializer(BaseModelSerializer):
             "document_type_name",
             "file",
             "file_url",
+            "file_size",
             "version",
             "is_confidential",
             "expiry_date",
@@ -89,6 +94,48 @@ class ProjectDocumentSerializer(BaseModelSerializer):
                 return request.build_absolute_uri(obj.file.url)
             return obj.file.url
         return None
+
+    def get_file_size(self, obj) -> str | None:
+        if not obj.file:
+            return None
+
+        size = obj.file.size
+        kilobyte = 1024
+        megabyte = kilobyte * 1024
+
+        if size < kilobyte:
+            return f"{size} B"
+        if size < megabyte:
+            return f"{size / 1024:.1f} KB"
+        return f"{size / megabyte:.1f} MB"
+
+    def validate_file(self, value):
+        allowed_document_extensions = (
+            ".pdf",
+            ".docx",
+            ".xlsx",
+            ".png",
+            ".jpg",
+            ".jpeg",
+        )
+
+        # ext = Path(value.name).suffix.lower()
+
+        # if ext not in allowed_document_extensions:
+        #     message = (
+        #         "Unsupported file extension. "
+        #         f"Allowed types are: {', '.join(allowed_document_extensions)}"
+        #     )
+        #     raise serializers.ValidationError(message)
+
+        if value.size > settings.MAX_DOCUMENT_UPLOAD_SIZE:
+            max_mb = settings.MAX_DOCUMENT_UPLOAD_SIZE / (1024 * 1024)
+            message = (
+                f"File size exceeds the limit. "
+                f"Maximum allowed size is {max_mb:.1f} MB."
+            )
+            raise serializers.ValidationError(message)
+        return value
 
 
 # ─── Contractor Serializers ───────────────────────────────────────────────────
