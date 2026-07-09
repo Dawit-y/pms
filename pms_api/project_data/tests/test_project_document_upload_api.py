@@ -77,7 +77,6 @@ class TestProjectDocumentAPI:
             format="multipart",
         )
         assert response.status_code == 400
-        # assert "Unsupported file extension" in str(response.data)
         assert (
         "File extension" in response.data["error"]["detail"]["file"][0]
         )

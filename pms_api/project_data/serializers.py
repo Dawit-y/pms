@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from django.conf import settings
 from django.utils import timezone
 from rest_framework import serializers
@@ -110,24 +108,6 @@ class ProjectDocumentSerializer(BaseModelSerializer):
         return f"{size / megabyte:.1f} MB"
 
     def validate_file(self, value):
-        allowed_document_extensions = (
-            ".pdf",
-            ".docx",
-            ".xlsx",
-            ".png",
-            ".jpg",
-            ".jpeg",
-        )
-
-        # ext = Path(value.name).suffix.lower()
-
-        # if ext not in allowed_document_extensions:
-        #     message = (
-        #         "Unsupported file extension. "
-        #         f"Allowed types are: {', '.join(allowed_document_extensions)}"
-        #     )
-        #     raise serializers.ValidationError(message)
-
         if value.size > settings.MAX_DOCUMENT_UPLOAD_SIZE:
             max_mb = settings.MAX_DOCUMENT_UPLOAD_SIZE / (1024 * 1024)
             message = (
