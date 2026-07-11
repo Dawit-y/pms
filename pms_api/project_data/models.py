@@ -230,6 +230,10 @@ class Risk(ProjectDataMixin, BaseModel):
         return self.SCORE_WEIGHTS[self.probability] * self.SCORE_WEIGHTS[self.impact]
 
 
+# Connect signals for the Risk model
+Risk.connect_signals()
+
+
 # ── Milestone ─────────────────────────────────────────────────────────────────
 class Milestone(ProjectDataMixin, BaseModel):
     title = models.CharField(max_length=500)
