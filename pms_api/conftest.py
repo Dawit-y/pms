@@ -106,6 +106,21 @@ def project_type(db):
 
 
 @pytest.fixture
+def document_type(db):
+    """Create a document type lookup."""
+    lookup_type, _ = LookupType.objects.get_or_create(
+        code="document_type",
+        name_en="Document Type",
+    )
+    document_type_lookup, _ = Lookup.objects.get_or_create(
+        lookup_type=lookup_type,
+        code="pdf",
+        name_en="PDF",
+    )
+    return document_type_lookup
+
+
+@pytest.fixture
 def location(db):
     """Create a location."""
     location, _ = Location.objects.get_or_create(

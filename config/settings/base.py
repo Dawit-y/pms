@@ -177,6 +177,10 @@ STATICFILES_FINDERS = [
 MEDIA_ROOT = str(APPS_DIR / "media")
 # https://docs.djangoproject.com/en/dev/ref/settings/#media-url
 MEDIA_URL = "/media/"
+# ------------------------------------------------------------------------------
+# File Upload Limits
+# ------------------------------------------------------------------------------
+MAX_DOCUMENT_UPLOAD_SIZE = 10 * 1024 * 1024  # 10 MB
 
 # TEMPLATES
 # ------------------------------------------------------------------------------

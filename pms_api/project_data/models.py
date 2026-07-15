@@ -1,3 +1,4 @@
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.utils import timezone
 
@@ -55,7 +56,20 @@ class ProjectDocument(ProjectDataMixin, BaseModel):
         on_delete=models.PROTECT,
         limit_choices_to={"lookup_type__code": "document_type"},
     )
-    file = models.FileField(upload_to="projects/documents/%Y/%m/")
+    file = models.FileField(
+        upload_to="projects/documents/%Y/%m/",
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=[
+                    "pdf",
+                    "docx",
+                    "xlsx",
+                    "png",
+                    "jpg",
+                ],
+            ),
+        ],
+    )
     version = models.CharField(max_length=20, default="1.0")
     is_confidential = models.BooleanField(default=False)
     expiry_date = models.DateField(null=True, blank=True)
