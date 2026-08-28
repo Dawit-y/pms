@@ -22,7 +22,7 @@ dependencies = [
   "argon2-cffi==25.1.0",
   "celery[redis]>=5.5.0",
   "django==6.0.3",
-  "django-anymail[mailgun]==14.0",
+  "django-anymail[mailgun]==15.0",
   "django-celery-beat>=2.7.0",
   "django-celery-results>=2.5.1",
   "django-cors-headers==4.9.0",
